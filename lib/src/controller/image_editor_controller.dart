@@ -51,10 +51,6 @@ class ImageEditorController extends ChangeNotifier {
     _updateState(_state.copyWith(flipHorizontal: !_state.flipHorizontal));
   }
 
-  void flipVertical() {
-    _updateState(_state.copyWith(flipVertical: !_state.flipVertical));
-  }
-
   // Crop controls
   void setCropRect(CropRect rect) {
     _updateState(_state.copyWith(cropRect: rect));

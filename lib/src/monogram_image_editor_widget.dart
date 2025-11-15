@@ -6,9 +6,9 @@ import 'package:monogram_image_editor/src/models/image_editor_state.dart';
 import 'package:monogram_image_editor/src/widgets/adjustment_controls.dart';
 import 'package:monogram_image_editor/src/widgets/crop_controls.dart';
 import 'package:monogram_image_editor/src/widgets/image_canvas.dart';
-import 'package:monogram_image_editor/src/widgets/rotation_controls.dart';
 import 'package:monogram_image_editor/src/utils/image_processing.dart';
 import 'package:flutter/material.dart';
+import 'package:monogram_image_editor/src/widgets/rotate_tools_top.dart';
 
 /// iOS-style image editor widget
 class MonogramImageEditor extends StatefulWidget {
@@ -114,12 +114,20 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
         return Material(
           color: Colors.black,
           child: Column(
+            // crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
               _buildHeader(context),
 
-              // Image canvas
+              if (state.currentTab == EditorTab.crop) ...[
+                RotateTools(controller: _controller, state: state),
+              ] else if (state.currentTab == EditorTab.adjust) ...[
+                // Placeholder for potential adjustment tools header
+              ],
+
+              // Image canvas - takes most of the screen
               Expanded(
+                flex: 3,
                 child: ImageCanvas(
                   imageFile: widget.imageFile,
                   imageBytes: widget.imageBytes,
@@ -127,21 +135,17 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
                 ),
               ),
 
-              // Bottom controls
+              // Bottom controls - compact
               Container(
                 color: const Color(0xFF1C1C1E),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Tab selector
-                    _buildTabSelector(state),
+                    // Tool-specific controls - limited height
+                    _buildToolControls(state),
 
-                    // Tool-specific controls
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: _buildToolControls(state),
-                      ),
-                    ),
+                    // Tab selector at bottom
+                    _buildTabSelector(state),
                   ],
                 ),
               ),
@@ -208,28 +212,31 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
 
   Widget _buildTabSelector(ImageEditorState state) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.only(left: 62, right: 62, bottom: 26),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C2C2E),
+        borderRadius: BorderRadius.circular(42),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
+          const SizedBox(width: 8),
           _buildTab(
-            icon: CupertinoIcons.crop,
+            icon: CupertinoIcons.crop_rotate,
             label: 'Crop',
             isSelected: state.currentTab == EditorTab.crop,
             onTap: () => _controller.setTab(EditorTab.crop),
           ),
+          const SizedBox(width: 60),
           _buildTab(
             icon: CupertinoIcons.slider_horizontal_3,
             label: 'Adjust',
             isSelected: state.currentTab == EditorTab.adjust,
             onTap: () => _controller.setTab(EditorTab.adjust),
           ),
-          _buildTab(
-            icon: CupertinoIcons.rotate_right,
-            label: 'Rotate',
-            isSelected: state.currentTab == EditorTab.rotate,
-            onTap: () => _controller.setTab(EditorTab.rotate),
-          ),
+          const SizedBox(width: 8),
         ],
       ),
     );
@@ -243,31 +250,24 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2C2C2E) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? CupertinoColors.systemBlue : Colors.white70,
+            size: 24,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
               color: isSelected ? CupertinoColors.systemBlue : Colors.white70,
-              size: 24,
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? CupertinoColors.systemBlue : Colors.white70,
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -278,8 +278,6 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
         return CropControls(controller: _controller);
       case EditorTab.adjust:
         return AdjustmentControls(controller: _controller);
-      case EditorTab.rotate:
-        return RotationControls(controller: _controller);
     }
   }
 }

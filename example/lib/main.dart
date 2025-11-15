@@ -101,26 +101,32 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             const SizedBox(height: 40),
-            ElevatedButton.icon(
-              onPressed: () {
-                log('Camera button pressed');
-                _pickAndEditImage(ImageSource.camera);
-              },
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Take Photo & Edit'),
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  log('Camera button pressed');
+                  _pickAndEditImage(ImageSource.camera);
+                },
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Take Photo & Edit'),
+                style: ElevatedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () => _pickAndEditImage(ImageSource.gallery),
-              icon: const Icon(Icons.photo_library),
-              label: const Text('Choose from Gallery & Edit'),
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _pickAndEditImage(ImageSource.gallery),
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Choose from Gallery & Edit'),
+                style: ElevatedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                ),
               ),
             ),
           ],

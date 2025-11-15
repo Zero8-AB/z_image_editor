@@ -34,9 +34,6 @@ class ImageProcessing {
     if (state.flipHorizontal) {
       image = img.flipHorizontal(image);
     }
-    if (state.flipVertical) {
-      image = img.flipVertical(image);
-    }
 
     // Apply color adjustments
     image = _applyColorAdjustments(

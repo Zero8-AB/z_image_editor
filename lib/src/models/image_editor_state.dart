@@ -11,7 +11,6 @@ class ImageEditorState {
   final double rotation; // in degrees (90-degree increments)
   final double fineRotation; // fine-tune angle (-45 to 45)
   final bool flipHorizontal;
-  final bool flipVertical;
   final CropRect? cropRect;
   final EditorTab currentTab;
   final bool isProcessing;
@@ -25,7 +24,6 @@ class ImageEditorState {
     this.rotation = 0.0,
     this.fineRotation = 0.0,
     this.flipHorizontal = false,
-    this.flipVertical = false,
     this.cropRect,
     this.currentTab = EditorTab.crop,
     this.isProcessing = false,
@@ -55,7 +53,6 @@ class ImageEditorState {
       rotation: rotation ?? this.rotation,
       fineRotation: fineRotation ?? this.fineRotation,
       flipHorizontal: flipHorizontal ?? this.flipHorizontal,
-      flipVertical: flipVertical ?? this.flipVertical,
       cropRect: clearCropRect ? null : (cropRect ?? this.cropRect),
       currentTab: currentTab ?? this.currentTab,
       isProcessing: isProcessing ?? this.isProcessing,
@@ -69,14 +66,12 @@ class ImageEditorState {
       rotation != 0.0 ||
       fineRotation != 0.0 ||
       flipHorizontal ||
-      flipVertical ||
       cropRect != null;
 }
 
 enum EditorTab {
   crop,
   adjust,
-  rotate,
 }
 
 /// Represents a crop rectangle

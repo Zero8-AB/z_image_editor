@@ -38,12 +38,6 @@ class RotationControls extends StatelessWidget {
                     isActive: state.flipHorizontal,
                     onTap: controller.flipHorizontal,
                   ),
-                  _buildButton(
-                    icon: CupertinoIcons.arrow_up_down,
-                    label: 'Flip V',
-                    isActive: state.flipVertical,
-                    onTap: controller.flipVertical,
-                  ),
                 ],
               ),
               const SizedBox(height: 20),

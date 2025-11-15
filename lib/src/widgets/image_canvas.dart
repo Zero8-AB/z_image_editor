@@ -70,7 +70,6 @@ class ImageCanvas extends StatelessWidget {
             ..rotateZ((state.rotation + state.fineRotation) * 3.14159 / 180)
             ..scale(
               state.flipHorizontal ? -1.0 : 1.0,
-              state.flipVertical ? -1.0 : 1.0,
             ),
           child: transformedImage,
         );
