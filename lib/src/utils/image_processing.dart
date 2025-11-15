@@ -19,9 +19,26 @@ class ImageProcessing {
       throw Exception('Failed to decode image');
     }
 
-    // Apply crop if set
-    if (state.cropRect != null) {
-      image = _applyCrop(image, state.cropRect!, state.scale, state.panOffset);
+    // Apply crop/zoom if either crop rect is set OR if there's zoom/pan
+    // If no explicit crop rect, use full image (0,0,1,1) as the crop area
+    if (state.cropRect != null ||
+        state.scale != 1.0 ||
+        state.panOffset != Offset.zero) {
+      final cropRect = state.cropRect ??
+          const CropRect(
+            left: 0.0,
+            top: 0.0,
+            width: 1.0,
+            height: 1.0,
+          );
+
+      image = _applyCrop(
+        image,
+        cropRect,
+        state.scale,
+        state.panOffset,
+        state.displaySize,
+      );
     }
 
     // Apply rotation (both 90-degree and fine rotation)
@@ -58,17 +75,14 @@ class ImageProcessing {
     CropRect cropRect,
     double scale,
     Offset panOffset,
+    Size? displaySize,
   ) {
-    // When zoomed/panned, we need to account for the transformation
-    // The crop rect is in the viewport coordinates (0-1)
-    // We need to map it to the zoomed/panned image coordinates
+    // The crop overlay is in normalized viewport coordinates (0-1)
+    // The image is zoomed by 'scale' and panned by 'panOffset' (in screen pixels)
+    // We need to calculate what region of the original image is inside the crop overlay
 
-    // Calculate the actual region of the original image that's visible
-    // after zoom and pan transformations
-
-    // For simplicity, if there's no zoom/pan (scale = 1.0, panOffset = 0,0)
-    // we just use the crop rect directly
     if (scale == 1.0 && panOffset == Offset.zero) {
+      // No zoom/pan - simple crop using the crop rect directly
       final x = (cropRect.left * image.width).toInt();
       final y = (cropRect.top * image.height).toInt();
       final width = (cropRect.width * image.width).toInt();
@@ -76,34 +90,86 @@ class ImageProcessing {
 
       return img.copyCrop(
         image,
-        x: x,
-        y: y,
-        width: width,
-        height: height,
+        x: x.clamp(0, image.width),
+        y: y.clamp(0, image.height),
+        width: width.clamp(1, image.width - x.clamp(0, image.width)),
+        height: height.clamp(1, image.height - y.clamp(0, image.height)),
       );
     }
 
-    // When zoomed, the crop rectangle in viewport space needs to be
-    // mapped back to the original image space accounting for the zoom and pan
-    // The transformation is: viewport -> zoomed image -> original image
+    // When zoomed/panned, we need to transform coordinates:
+    // 1. Crop rect is in viewport space (0-1 normalized)
+    // 2. Convert to display pixel space
+    // 3. Account for pan offset (subtract it, since pan moves the image)
+    // 4. Divide by scale to get original image space
+    // 5. Convert to original image pixel coordinates
 
-    // First, account for the pan offset (normalized to image size)
-    // The panOffset is in screen pixels, so we need to normalize it
-    // relative to the displayed image size
+    if (displaySize == null) {
+      // Fallback if display size not available - use simple crop
+      final x = (cropRect.left * image.width).toInt();
+      final y = (cropRect.top * image.height).toInt();
+      final width = (cropRect.width * image.width).toInt();
+      final height = (cropRect.height * image.height).toInt();
 
-    // For now, implement a simplified version:
-    // Crop from the zoomed region
-    final x = (cropRect.left * image.width).toInt();
-    final y = (cropRect.top * image.height).toInt();
-    final width = (cropRect.width * image.width).toInt();
-    final height = (cropRect.height * image.height).toInt();
+      return img.copyCrop(
+        image,
+        x: x.clamp(0, image.width),
+        y: y.clamp(0, image.height),
+        width: width.clamp(1, image.width - x.clamp(0, image.width)),
+        height: height.clamp(1, image.height - y.clamp(0, image.height)),
+      );
+    }
+
+    // Convert crop rect from normalized viewport coordinates to display pixels
+    final cropLeftPx = cropRect.left * displaySize.width;
+    final cropTopPx = cropRect.top * displaySize.height;
+    final cropWidthPx = cropRect.width * displaySize.width;
+    final cropHeightPx = cropRect.height * displaySize.height;
+
+    // Account for pan and scale to get position in original image space
+    // panOffset is how much the image has been moved in screen pixels
+    // Subtracting pan offset gives us the position relative to the unmovedimage
+    // Then dividing by scale gives us the position in the original image coordinates
+    final imageLeftPx = (cropLeftPx - panOffset.dx) / scale;
+    final imageTopPx = (cropTopPx - panOffset.dy) / scale;
+    final imageWidthPx = cropWidthPx / scale;
+    final imageHeightPx = cropHeightPx / scale;
+
+    // The displaySize represents the fitted image size
+    // We need to map from display coordinates to original image coordinates
+    // Calculate the scale factor between display size and original image size
+    final displayAspect = displaySize.width / displaySize.height;
+    final imageAspect = image.width / image.height;
+
+    double displayToImageScale;
+    double offsetX = 0;
+    double offsetY = 0;
+
+    if (displayAspect > imageAspect) {
+      // Image is fitted to height, letterboxed on sides
+      displayToImageScale = image.height / displaySize.height;
+      final displayedWidth = image.width / displayToImageScale;
+      offsetX = (displaySize.width - displayedWidth) / 2;
+    } else {
+      // Image is fitted to width, letterboxed on top/bottom
+      displayToImageScale = image.width / displaySize.width;
+      final displayedHeight = image.height / displayToImageScale;
+      offsetY = (displaySize.height - displayedHeight) / 2;
+    }
+
+    // Convert from display coordinates to original image coordinates
+    // Account for letterboxing offset
+    final x = ((imageLeftPx - offsetX) * displayToImageScale).toInt();
+    final y = ((imageTopPx - offsetY) * displayToImageScale).toInt();
+    final width = (imageWidthPx * displayToImageScale).toInt();
+    final height = (imageHeightPx * displayToImageScale).toInt();
 
     return img.copyCrop(
       image,
       x: x.clamp(0, image.width),
       y: y.clamp(0, image.height),
-      width: width.clamp(1, image.width - x),
-      height: height.clamp(1, image.height - y),
+      width: width.clamp(1, image.width - x.clamp(0, image.width)),
+      height: height.clamp(1, image.height - y.clamp(0, image.height)),
     );
   }
 

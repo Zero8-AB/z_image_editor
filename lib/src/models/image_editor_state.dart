@@ -14,7 +14,8 @@ class ImageEditorState {
   final bool flipHorizontal;
   final CropRect? cropRect;
   final double scale; // zoom scale (1.0 = no zoom)
-  final Offset panOffset; // pan offset in normalized coordinates
+  final Offset panOffset; // pan offset in screen pixels from InteractiveViewer
+  final Size? displaySize; // actual displayed image size on screen
   final EditorTab currentTab;
   final bool isProcessing;
 
@@ -30,6 +31,7 @@ class ImageEditorState {
     this.cropRect,
     this.scale = 1.0,
     this.panOffset = Offset.zero,
+    this.displaySize,
     this.currentTab = EditorTab.crop,
     this.isProcessing = false,
   });
@@ -48,6 +50,7 @@ class ImageEditorState {
     bool clearCropRect = false,
     double? scale,
     Offset? panOffset,
+    Size? displaySize,
     EditorTab? currentTab,
     bool? isProcessing,
   }) {
@@ -63,6 +66,7 @@ class ImageEditorState {
       cropRect: clearCropRect ? null : (cropRect ?? this.cropRect),
       scale: scale ?? this.scale,
       panOffset: panOffset ?? this.panOffset,
+      displaySize: displaySize ?? this.displaySize,
       currentTab: currentTab ?? this.currentTab,
       isProcessing: isProcessing ?? this.isProcessing,
     );

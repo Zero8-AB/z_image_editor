@@ -69,6 +69,10 @@ class ImageEditorController extends ChangeNotifier {
     _updateState(_state.copyWith(panOffset: offset));
   }
 
+  void setDisplaySize(Size size) {
+    _updateState(_state.copyWith(displaySize: size));
+  }
+
   void resetZoom() {
     _updateState(_state.copyWith(scale: 1.0, panOffset: Offset.zero));
   }

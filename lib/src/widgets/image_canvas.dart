@@ -93,6 +93,17 @@ class _ImageCanvasState extends State<ImageCanvas> {
           child: Center(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                // Update the display size based on the available viewport
+                // This is called on every build, ensuring we have the current size
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    // The constraints give us the viewport size
+                    widget.controller.setDisplaySize(
+                      Size(constraints.maxWidth, constraints.maxHeight),
+                    );
+                  }
+                });
+
                 return Stack(
                   children: [
                     // Image with InteractiveViewer for zoom/pan
