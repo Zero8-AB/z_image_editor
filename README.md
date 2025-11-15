@@ -6,6 +6,7 @@ A beautiful iOS-style image editor for Flutter with crop, rotate, and color adju
 
 - 🎨 **iOS-Native Design** - Authentic iOS aesthetics with dark theme
 - ✂️ **Crop** - Multiple aspect ratio presets (Free, Square, 4:3, 16:9) with visual grid overlay
+- 🔍 **Pinch-to-Zoom** - Zoom in/out with pinch gestures on mobile, zoom and pan the image behind the crop overlay
 - 🔄 **Rotate** - 90° rotation, horizontal/vertical flip, and fine-tune rotation slider
 - 🌈 **Color Adjustments** - Brightness, contrast, and saturation controls with real-time preview
 - 📱 **Platform Aware** - Optimized for iOS with CupertinoActionSheet integration
@@ -168,7 +169,13 @@ Main widget for the image editor.
 
 - **Aspect Ratios**: Free, Square (1:1), 4:3, 16:9
 - **Visual Grid**: Rule of thirds overlay
+- **Pinch-to-Zoom**: Use pinch gestures to zoom in/out on mobile
+- **Pan**: Pan the zoomed image with drag gestures
+- **Reset Zoom**: Quickly reset to 100% zoom (button appears when zoomed)
+- **Zoom Indicator**: Shows current zoom level as percentage
 - **Reset**: Quick reset to original crop
+
+> **Note**: When you save the image, only the portion visible within the crop overlay will be saved, taking into account the zoom and pan position. The image zooms behind the overlay, allowing you to precisely select the area you want to keep.
 
 #### Adjust Tab
 

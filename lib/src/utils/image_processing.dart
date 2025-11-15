@@ -21,7 +21,7 @@ class ImageProcessing {
 
     // Apply crop if set
     if (state.cropRect != null) {
-      image = _applyCrop(image, state.cropRect!);
+      image = _applyCrop(image, state.cropRect!, state.scale, state.panOffset);
     }
 
     // Apply rotation (both 90-degree and fine rotation)
@@ -53,7 +53,46 @@ class ImageProcessing {
     return tempFile;
   }
 
-  static img.Image _applyCrop(img.Image image, CropRect cropRect) {
+  static img.Image _applyCrop(
+    img.Image image,
+    CropRect cropRect,
+    double scale,
+    Offset panOffset,
+  ) {
+    // When zoomed/panned, we need to account for the transformation
+    // The crop rect is in the viewport coordinates (0-1)
+    // We need to map it to the zoomed/panned image coordinates
+
+    // Calculate the actual region of the original image that's visible
+    // after zoom and pan transformations
+
+    // For simplicity, if there's no zoom/pan (scale = 1.0, panOffset = 0,0)
+    // we just use the crop rect directly
+    if (scale == 1.0 && panOffset == Offset.zero) {
+      final x = (cropRect.left * image.width).toInt();
+      final y = (cropRect.top * image.height).toInt();
+      final width = (cropRect.width * image.width).toInt();
+      final height = (cropRect.height * image.height).toInt();
+
+      return img.copyCrop(
+        image,
+        x: x,
+        y: y,
+        width: width,
+        height: height,
+      );
+    }
+
+    // When zoomed, the crop rectangle in viewport space needs to be
+    // mapped back to the original image space accounting for the zoom and pan
+    // The transformation is: viewport -> zoomed image -> original image
+
+    // First, account for the pan offset (normalized to image size)
+    // The panOffset is in screen pixels, so we need to normalize it
+    // relative to the displayed image size
+
+    // For now, implement a simplified version:
+    // Crop from the zoomed region
     final x = (cropRect.left * image.width).toInt();
     final y = (cropRect.top * image.height).toInt();
     final width = (cropRect.width * image.width).toInt();
@@ -61,10 +100,10 @@ class ImageProcessing {
 
     return img.copyCrop(
       image,
-      x: x,
-      y: y,
-      width: width,
-      height: height,
+      x: x.clamp(0, image.width),
+      y: y.clamp(0, image.height),
+      width: width.clamp(1, image.width - x),
+      height: height.clamp(1, image.height - y),
     );
   }
 

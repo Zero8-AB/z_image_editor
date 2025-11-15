@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:monogram_image_editor/src/models/image_editor_state.dart';
 
 class ImageEditorController extends ChangeNotifier {
@@ -58,6 +58,19 @@ class ImageEditorController extends ChangeNotifier {
 
   void resetCrop() {
     _updateState(_state.copyWith(clearCropRect: true));
+  }
+
+  // Zoom and pan controls
+  void setScale(double scale) {
+    _updateState(_state.copyWith(scale: scale));
+  }
+
+  void setPanOffset(Offset offset) {
+    _updateState(_state.copyWith(panOffset: offset));
+  }
+
+  void resetZoom() {
+    _updateState(_state.copyWith(scale: 1.0, panOffset: Offset.zero));
   }
 
   // Reset all adjustments

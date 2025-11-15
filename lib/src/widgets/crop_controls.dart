@@ -1,4 +1,3 @@
-import 'package:monogram_image_editor/monogram_image_editor.dart';
 import 'package:monogram_image_editor/src/controller/image_editor_controller.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';

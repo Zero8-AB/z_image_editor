@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 
 /// State model for the image editor
 class ImageEditorState {
@@ -12,6 +13,8 @@ class ImageEditorState {
   final double fineRotation; // fine-tune angle (-45 to 45)
   final bool flipHorizontal;
   final CropRect? cropRect;
+  final double scale; // zoom scale (1.0 = no zoom)
+  final Offset panOffset; // pan offset in normalized coordinates
   final EditorTab currentTab;
   final bool isProcessing;
 
@@ -25,6 +28,8 @@ class ImageEditorState {
     this.fineRotation = 0.0,
     this.flipHorizontal = false,
     this.cropRect,
+    this.scale = 1.0,
+    this.panOffset = Offset.zero,
     this.currentTab = EditorTab.crop,
     this.isProcessing = false,
   });
@@ -41,6 +46,8 @@ class ImageEditorState {
     bool? flipVertical,
     CropRect? cropRect,
     bool clearCropRect = false,
+    double? scale,
+    Offset? panOffset,
     EditorTab? currentTab,
     bool? isProcessing,
   }) {
@@ -54,6 +61,8 @@ class ImageEditorState {
       fineRotation: fineRotation ?? this.fineRotation,
       flipHorizontal: flipHorizontal ?? this.flipHorizontal,
       cropRect: clearCropRect ? null : (cropRect ?? this.cropRect),
+      scale: scale ?? this.scale,
+      panOffset: panOffset ?? this.panOffset,
       currentTab: currentTab ?? this.currentTab,
       isProcessing: isProcessing ?? this.isProcessing,
     );
@@ -66,7 +75,9 @@ class ImageEditorState {
       rotation != 0.0 ||
       fineRotation != 0.0 ||
       flipHorizontal ||
-      cropRect != null;
+      cropRect != null ||
+      scale != 1.0 ||
+      panOffset != Offset.zero;
 }
 
 enum EditorTab {

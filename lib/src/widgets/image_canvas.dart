@@ -6,7 +6,7 @@ import 'package:monogram_image_editor/src/utils/image_processing.dart';
 import 'package:flutter/material.dart';
 
 /// Interactive image canvas that displays the image with all transformations
-class ImageCanvas extends StatelessWidget {
+class ImageCanvas extends StatefulWidget {
   final File? imageFile;
   final Uint8List? imageBytes;
   final ImageEditorController controller;
@@ -19,22 +19,36 @@ class ImageCanvas extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<ImageCanvas> createState() => _ImageCanvasState();
+}
+
+class _ImageCanvasState extends State<ImageCanvas> {
+  final TransformationController _transformationController =
+      TransformationController();
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: controller,
+      listenable: widget.controller,
       builder: (context, child) {
-        final state = controller.state;
+        final state = widget.controller.state;
 
         Widget imageWidget;
 
-        if (imageFile != null) {
+        if (widget.imageFile != null) {
           imageWidget = Image.file(
-            imageFile!,
+            widget.imageFile!,
             fit: BoxFit.contain,
           );
-        } else if (imageBytes != null) {
+        } else if (widget.imageBytes != null) {
           imageWidget = Image.memory(
-            imageBytes!,
+            widget.imageBytes!,
             fit: BoxFit.contain,
           );
         } else {
@@ -77,30 +91,57 @@ class ImageCanvas extends StatelessWidget {
         return Container(
           color: Colors.black,
           child: Center(
-            child: ClipRect(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Show full image in crop mode, cropped version in other modes
-                  if (state.currentTab == EditorTab.crop)
-                    transformedImage
-                  else if (state.cropRect != null)
-                    _buildCroppedImage(transformedImage, state.cropRect!)
-                  else
-                    transformedImage,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Stack(
+                  children: [
+                    // Image with InteractiveViewer for zoom/pan
+                    InteractiveViewer(
+                      transformationController: _transformationController,
+                      minScale: 1.0,
+                      maxScale: 4.0,
+                      boundaryMargin: const EdgeInsets.all(double.infinity),
+                      onInteractionUpdate: (details) {
+                        // Extract scale and translation from transformation matrix in real-time
+                        final matrix = _transformationController.value;
+                        final scale = matrix.getMaxScaleOnAxis();
+                        final translation = matrix.getTranslation();
 
-                  // Crop overlay (if in crop mode)
-                  if (state.currentTab == EditorTab.crop)
-                    Positioned.fill(
-                      child: CropOverlay(
-                        cropRect: state.cropRect,
-                        onCropChanged: (rect) {
-                          controller.setCropRect(rect);
-                        },
+                        widget.controller.setScale(scale);
+                        widget.controller
+                            .setPanOffset(Offset(translation.x, translation.y));
+                      },
+                      child: ClipRect(
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Show full image in crop mode, cropped version in other modes
+                            if (state.currentTab == EditorTab.crop)
+                              transformedImage
+                            else if (state.cropRect != null)
+                              _buildCroppedImage(
+                                  transformedImage, state.cropRect!)
+                            else
+                              transformedImage,
+                          ],
+                        ),
                       ),
                     ),
-                ],
-              ),
+
+                    // Crop overlay (if in crop mode) - positioned above InteractiveViewer
+                    // This stays fixed and doesn't zoom/pan with the image
+                    if (state.currentTab == EditorTab.crop)
+                      Positioned.fill(
+                        child: CropOverlay(
+                          cropRect: state.cropRect,
+                          onCropChanged: (rect) {
+                            widget.controller.setCropRect(rect);
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         );
@@ -143,7 +184,6 @@ class CropOverlay extends StatefulWidget {
 
 class _CropOverlayState extends State<CropOverlay> {
   CropRect? _currentRect;
-  Offset? _dragStart;
   CropRect? _dragStartRect;
 
   @override
@@ -186,52 +226,25 @@ class _CropOverlayState extends State<CropOverlay> {
 
         return Stack(
           children: [
-            // Dark overlay outside crop area
+            // Dark overlay outside crop area - this is visual only, no touch blocking
             Positioned.fill(
-              child: CustomPaint(
-                painter: CropOverlayPainter(
-                  cropRect: Rect.fromLTWH(left, top, width, height),
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: CropOverlayPainter(
+                    cropRect: Rect.fromLTWH(left, top, width, height),
+                  ),
                 ),
               ),
             ),
 
-            // Draggable crop area (to move the entire crop)
+            // Draggable crop area - DISABLED to allow zoom gestures
+            // Users can still move crop by dragging the handles
             Positioned(
               left: left,
               top: top,
               width: width,
               height: height,
-              child: GestureDetector(
-                onPanStart: (details) {
-                  _dragStart = details.localPosition;
-                  _dragStartRect = _currentRect;
-                },
-                onPanUpdate: (details) {
-                  if (_dragStart == null || _dragStartRect == null) return;
-
-                  final delta = details.localPosition - _dragStart!;
-                  final dx = delta.dx / constraints.maxWidth;
-                  final dy = delta.dy / constraints.maxHeight;
-
-                  setState(() {
-                    var newLeft = (_dragStartRect!.left + dx)
-                        .clamp(0.0, 1.0 - _dragStartRect!.width);
-                    var newTop = (_dragStartRect!.top + dy)
-                        .clamp(0.0, 1.0 - _dragStartRect!.height);
-
-                    _currentRect = CropRect(
-                      left: newLeft,
-                      top: newTop,
-                      width: _dragStartRect!.width,
-                      height: _dragStartRect!.height,
-                    );
-                  });
-                  widget.onCropChanged(_currentRect!);
-                },
-                onPanEnd: (_) {
-                  _dragStart = null;
-                  _dragStartRect = null;
-                },
+              child: IgnorePointer(
                 child: CustomPaint(
                   painter: GridPainter(),
                 ),
