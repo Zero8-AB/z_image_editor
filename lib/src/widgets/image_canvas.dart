@@ -151,10 +151,10 @@ class _CropOverlayState extends State<CropOverlay> {
     super.initState();
     _currentRect = widget.cropRect ??
         const CropRect(
-          left: 0.1,
-          top: 0.1,
-          width: 0.8,
-          height: 0.8,
+          left: 0.0,
+          top: 0.0,
+          width: 1.0,
+          height: 1.0,
         );
   }
 
@@ -164,10 +164,10 @@ class _CropOverlayState extends State<CropOverlay> {
     if (widget.cropRect != oldWidget.cropRect) {
       _currentRect = widget.cropRect ??
           const CropRect(
-            left: 0.1,
-            top: 0.1,
-            width: 0.8,
-            height: 0.8,
+            left: 0.0,
+            top: 0.0,
+            width: 1.0,
+            height: 1.0,
           );
     }
   }
