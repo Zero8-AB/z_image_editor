@@ -121,9 +121,21 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
               _buildHeader(context),
 
               if (state.currentTab == EditorTab.crop) ...[
-                RotateTools(controller: _controller, state: state),
+                Container(
+                  padding: const EdgeInsets.only(left: 12),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1C1C1E),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      RotateTools(controller: _controller, state: state),
+                      _buildAdjustmentHeader(state),
+                    ],
+                  ),
+                ),
               ] else if (state.currentTab == EditorTab.adjust) ...[
-                // Placeholder for potential adjustment tools header
+                _buildAdjustmentHeader(state),
               ],
 
               // Image canvas - takes most of the screen
@@ -280,5 +292,43 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
       case EditorTab.adjust:
         return AdjustmentControls(controller: _controller);
     }
+  }
+
+  Widget _buildAdjustmentHeader(ImageEditorState state) {
+    final hasAdjustments = state.brightness != 0.0 ||
+        state.contrast != 1.0 ||
+        state.saturation != 1.0 ||
+        state.rotation != 0.0 ||
+        state.fineRotation != 0.0 ||
+        state.flipHorizontal ||
+        state.cropRect != null ||
+        state.scale != 1.0 ||
+        state.panOffset != Offset.zero;
+
+    return Container(
+      height: 44,
+      color: const Color(0xFF1C1C1E),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (hasAdjustments)
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () {
+                _controller.reset();
+              },
+              child: const Text(
+                'Reset',
+                style: TextStyle(
+                  color: CupertinoColors.systemBlue,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

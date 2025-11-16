@@ -36,6 +36,8 @@ class GlassContainer extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   //You can configure other properties as well
 
+  final Border? border;
+
   const GlassContainer({
     super.key,
     this.height = 0,
@@ -51,6 +53,7 @@ class GlassContainer extends StatelessWidget {
     ),
     this.margin,
     this.padding,
+    this.border,
   });
 
   @override
@@ -62,7 +65,7 @@ class GlassContainer extends StatelessWidget {
           // Blur effect
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-            child: Container(),
+            child: const SizedBox.shrink(),
           ),
           // Gradient overlay
           Container(
@@ -72,7 +75,7 @@ class GlassContainer extends StatelessWidget {
             padding: padding,
             decoration: BoxDecoration(
               gradient: gradient,
-              border: Border.all(color: borderColor),
+              border: border ?? Border.all(color: borderColor),
               borderRadius: BorderRadius.circular(borderRadius),
             ),
             child: child,

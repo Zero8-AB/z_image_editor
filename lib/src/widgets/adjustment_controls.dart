@@ -1,6 +1,7 @@
 import 'package:monogram_image_editor/src/controller/image_editor_controller.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:monogram_image_editor/src/widgets/liquid_glass.dart';
 
 enum AdjustmentType {
   brightness,
@@ -88,24 +89,13 @@ class _AdjustmentControlsState extends State<AdjustmentControls> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
+          GlassContainer(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isSelected
-                  ? CupertinoColors.systemBlue
-                  : Colors.white.withOpacity(0.1),
-              border: Border.all(
-                color: isSelected
-                    ? CupertinoColors.systemBlue
-                    : Colors.white.withOpacity(0.3),
-                width: 2,
-              ),
-            ),
+            borderRadius: 50,
             child: Icon(
               icon,
-              color: isSelected ? Colors.white : Colors.white70,
+              color: isSelected ? CupertinoColors.systemBlue : Colors.white70,
               size: 20,
             ),
           ),
