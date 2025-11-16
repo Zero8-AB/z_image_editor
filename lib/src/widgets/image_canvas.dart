@@ -105,11 +105,11 @@ class _ImageCanvasState extends State<ImageCanvas> {
           child: Center(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // Update the display size based on the available viewport
-                // This is called on every build, ensuring we have the current size
+                // Calculate the actual displayed image size accounting for BoxFit.contain
+                // This is critical for accurate coordinate transformation during save
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) {
-                    // The constraints give us the viewport size
+                    // Store the viewport size - this is what we need for coordinate mapping
                     widget.controller.setDisplaySize(
                       Size(constraints.maxWidth, constraints.maxHeight),
                     );

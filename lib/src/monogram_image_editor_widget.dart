@@ -12,13 +12,13 @@ import 'package:monogram_image_editor/src/widgets/liquid_glass.dart';
 import 'package:monogram_image_editor/src/widgets/rotate_tools_top.dart';
 
 /// iOS-style image editor widget
-class MonogramImageEditor extends StatefulWidget {
+class ImageEditor extends StatefulWidget {
   final File? imageFile;
   final Uint8List? imageBytes;
   final Function(File editedImage) onSave;
   final VoidCallback onCancel;
 
-  const MonogramImageEditor({
+  const ImageEditor({
     Key? key,
     this.imageFile,
     this.imageBytes,
@@ -29,10 +29,10 @@ class MonogramImageEditor extends StatefulWidget {
         super(key: key);
 
   @override
-  State<MonogramImageEditor> createState() => _MonogramImageEditorState();
+  State<ImageEditor> createState() => _ImageEditorState();
 }
 
-class _MonogramImageEditorState extends State<MonogramImageEditor> {
+class _ImageEditorState extends State<ImageEditor> {
   bool _isSaving = false;
   late ImageEditorController _controller;
 
@@ -208,7 +208,7 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
                         child: CupertinoActivityIndicator(),
                       )
                     : const Text(
-                        'Done',
+                        'Save',
                         style: TextStyle(
                           color: CupertinoColors.systemBlue,
                           fontSize: 17,

@@ -43,7 +43,7 @@ class _HomePageState extends State<HomePage> {
         final editedImage = await Navigator.of(context).push<File>(
           MaterialPageRoute(
             fullscreenDialog: true,
-            builder: (context) => MonogramImageEditor(
+            builder: (context) => ImageEditor(
               imageFile: File(pickedFile.path),
               onSave: (File edited) {
                 Navigator.of(context).pop(edited);

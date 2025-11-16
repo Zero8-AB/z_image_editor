@@ -1,4 +1,4 @@
-# Monogram Image Editor
+Image Editor
 
 A beautiful iOS-style image editor for Flutter with crop, rotate, and color adjustment features.
 
@@ -22,15 +22,15 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  monogram_image_editor: ^0.1.0
+  image_editor: ^0.1.0
 ```
 
 Or reference it locally:
 
 ```yaml
 dependencies:
-  monogram_image_editor:
-    path: ../monogram_image_editor
+  image_editor:
+  path: ../image_editor
 ```
 
 Then run:
@@ -44,14 +44,14 @@ flutter pub get
 ### Basic Usage
 
 ```dart
-import 'package:monogram_image_editor/monogram_image_editor.dart';
+import 'package:image_editor/image_editor.dart';
 import 'dart:io';
 
 // Show the image editor
 final editedImage = await Navigator.of(context).push<File>(
   MaterialPageRoute(
     fullscreenDialog: true,
-    builder: (context) => MonogramImageEditor(
+    builder: (context) => ImageEditor(
       imageFile: File('path/to/image.jpg'),
       onSave: (File editedFile) {
         Navigator.of(context).pop(editedFile);
@@ -73,7 +73,7 @@ if (editedImage != null) {
 
 ```dart
 import 'package:image_picker/image_picker.dart';
-import 'package:monogram_image_editor/monogram_image_editor.dart';
+import 'package:image_editor/image_editor.dart';
 
 final picker = ImagePicker();
 
@@ -85,7 +85,7 @@ if (photo != null) {
   final editedImage = await Navigator.of(context).push<File>(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (context) => MonogramImageEditor(
+      builder: (context) => ImageEditor(
         imageFile: File(photo.path),
         onSave: (File edited) {
           Navigator.of(context).pop(edited);
@@ -107,7 +107,7 @@ if (photo != null) {
 
 ```dart
 import 'package:flutter/cupertino.dart';
-import 'package:monogram_image_editor/monogram_image_editor.dart';
+import 'package:image_editor/image_editor.dart';
 
 Future<void> showImageSourcePicker(BuildContext context) async {
   final result = await showCupertinoModalPopup<String>(
@@ -137,7 +137,7 @@ Future<void> showImageSourcePicker(BuildContext context) async {
       final edited = await Navigator.of(context).push<File>(
         MaterialPageRoute(
           fullscreenDialog: true,
-          builder: (context) => MonogramImageEditor(
+          builder: (context) => ImageEditor(
             imageFile: File(photo.path),
             onSave: (file) => Navigator.pop(context, file),
             onCancel: () => Navigator.pop(context),
@@ -152,7 +152,7 @@ Future<void> showImageSourcePicker(BuildContext context) async {
 
 ## API Reference
 
-### MonogramImageEditor
+### ImageEditor
 
 Main widget for the image editor.
 
@@ -191,27 +191,6 @@ Main widget for the image editor.
 - **Flip Vertical**: Mirror image vertically
 - **Fine Rotation**: -45° to +45° with slider
 
-## Architecture
-
-The package uses Riverpod for state management and follows a clean architecture:
-
-```
-lib/
-├── monogram_image_editor.dart          # Main widget export
-├── src/
-│   ├── models/
-│   │   └── image_editor_state.dart     # State model
-│   ├── controller/
-│   │   └── image_editor_controller.dart # Riverpod controller
-│   ├── widgets/
-│   │   ├── image_canvas.dart           # Image display with transformations
-│   │   ├── adjustment_controls.dart    # Color adjustment sliders
-│   │   ├── crop_controls.dart          # Crop aspect ratio controls
-│   │   └── rotation_controls.dart      # Rotation and flip controls
-│   └── utils/
-│       └── image_processing.dart       # Image processing utilities
-```
-
 ## Requirements
 
 - Flutter SDK: >=3.1.3
@@ -221,8 +200,6 @@ lib/
 
 ## Dependencies
 
-- `flutter_riverpod` - State management
-- `riverpod_annotation` - Code generation for Riverpod
 - `image` - Image processing and manipulation
 
 ## Development
@@ -240,14 +217,6 @@ flutter run
 flutter test
 ```
 
-### Code generation
-
-After making changes to Riverpod providers:
-
-```bash
-flutter pub run build_runner build --delete-conflicting-outputs
-```
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -258,7 +227,7 @@ MIT License - see LICENSE file for details
 
 ## Credits
 
-Developed by [Monogram Art](https://github.com/Monogram-Art)
+Developed by [Image Editor Team](https://github.com/Image-Editor-Team)
 
 ## Changelog
 
