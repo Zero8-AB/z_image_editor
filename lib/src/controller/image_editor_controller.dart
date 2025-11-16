@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:monogram_image_editor/src/models/image_editor_state.dart';
+import 'package:image_editor/src/models/image_editor_state.dart';
 
 class ImageEditorController extends ChangeNotifier {
   ImageEditorState _state = const ImageEditorState();

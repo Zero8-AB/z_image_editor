@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:monogram_image_editor/src/controller/image_editor_controller.dart';
-import 'package:monogram_image_editor/src/models/image_editor_state.dart';
-import 'package:monogram_image_editor/src/utils/image_processing.dart';
+import 'package:image_editor/src/controller/image_editor_controller.dart';
+import 'package:image_editor/src/models/image_editor_state.dart';
+import 'package:image_editor/src/utils/image_processing.dart';
 import 'package:flutter/material.dart';
 
 /// Interactive image canvas that displays the image with all transformations

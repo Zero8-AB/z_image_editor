@@ -1,7 +1,7 @@
-import 'package:monogram_image_editor/src/controller/image_editor_controller.dart';
+import 'package:image_editor/src/controller/image_editor_controller.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:monogram_image_editor/src/widgets/liquid_glass.dart';
+import 'package:image_editor/src/widgets/liquid_glass.dart';
 
 enum AdjustmentType {
   brightness,

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
-import 'package:monogram_image_editor/src/models/image_editor_state.dart';
+import 'package:image_editor/src/models/image_editor_state.dart';
 
 class ImageProcessing {
   /// Apply all edits to the image and return the processed image

@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:image_editor/image_editor.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:monogram_image_editor/monogram_image_editor.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,7 +14,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Monogram Image Editor Example',
+      title: 'Image Editor Example',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -74,7 +74,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Monogram Image Editor'),
+        title: const Text('Image Editor'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),

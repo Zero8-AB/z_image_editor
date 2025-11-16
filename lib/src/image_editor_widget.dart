@@ -1,15 +1,15 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
-import 'package:monogram_image_editor/src/controller/image_editor_controller.dart';
-import 'package:monogram_image_editor/src/models/image_editor_state.dart';
-import 'package:monogram_image_editor/src/widgets/adjustment_controls.dart';
-import 'package:monogram_image_editor/src/widgets/crop_controls.dart';
-import 'package:monogram_image_editor/src/widgets/image_canvas.dart';
-import 'package:monogram_image_editor/src/utils/image_processing.dart';
+import 'package:image_editor/src/controller/image_editor_controller.dart';
+import 'package:image_editor/src/models/image_editor_state.dart';
+import 'package:image_editor/src/widgets/adjustment_controls.dart';
+import 'package:image_editor/src/widgets/crop_controls.dart';
+import 'package:image_editor/src/widgets/image_canvas.dart';
+import 'package:image_editor/src/utils/image_processing.dart';
 import 'package:flutter/material.dart';
-import 'package:monogram_image_editor/src/widgets/liquid_glass.dart';
-import 'package:monogram_image_editor/src/widgets/rotate_tools_top.dart';
+import 'package:image_editor/src/widgets/liquid_glass.dart';
+import 'package:image_editor/src/widgets/rotate_tools_top.dart';
 
 /// iOS-style image editor widget
 class ImageEditor extends StatefulWidget {
