@@ -396,58 +396,57 @@ class _ImageCanvasState extends State<ImageCanvas>
                     )
                   : null;
 
-              return ClipRect(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  // Pan/zoom is always active — in crop mode the crop overlay
-                  // handles consume touches on the handles/interior first.
-                  onScaleStart: _onScaleStart,
-                  onScaleUpdate: _onScaleUpdate,
-                  onScaleEnd: _onScaleEnd,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Transformed image (always rendered in full).
-                      transformedImage,
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                // Pan/zoom is always active — in crop mode the crop overlay
+                // handles consume touches on the handles/interior first.
+                onScaleStart: _onScaleStart,
+                onScaleUpdate: _onScaleUpdate,
+                onScaleEnd: _onScaleEnd,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Image clipped to viewport bounds.
+                    ClipRect(child: transformedImage),
 
-                      // In crop mode: full interactive overlay.
-                      if (state.currentTab == EditorTab.crop)
-                        Positioned.fill(
-                          child: CropOverlay(
-                            cropRect: state.cropRect,
-                            imageSize: _imageSize,
-                            viewportSize: vpSize,
-                            totalRotation: state.totalRotation,
-                            totalScale: state.minScaleForRotation * state.scale,
-                            panOffset: state.panOffset,
-                            flipHorizontal: state.flipHorizontal,
-                            flipVertical: state.flipVertical,
-                            aspectRatioPreset: state.aspectRatioPreset,
-                            onCropChanged: widget.controller.setCropRect,
-                            onCropDragEnd: _scheduleSnap,
-                            onScaleStart: _onScaleStart,
-                            onScaleUpdate: _onScaleUpdate,
-                            onScaleEnd: _onScaleEnd,
-                            onHandleDragChanged: (dragging) {
-                              setState(() {
-                                _isDraggingCropHandle = dragging;
-                              });
-                            },
+                    // CropOverlay lives OUTSIDE ClipRect so corner/edge handles
+                    // are never clipped at the screen edges.
+                    if (state.currentTab == EditorTab.crop)
+                      Positioned.fill(
+                        child: CropOverlay(
+                          cropRect: state.cropRect,
+                          imageSize: _imageSize,
+                          viewportSize: vpSize,
+                          totalRotation: state.totalRotation,
+                          totalScale: state.minScaleForRotation * state.scale,
+                          panOffset: state.panOffset,
+                          flipHorizontal: state.flipHorizontal,
+                          flipVertical: state.flipVertical,
+                          aspectRatioPreset: state.aspectRatioPreset,
+                          onCropChanged: widget.controller.setCropRect,
+                          onCropDragEnd: _scheduleSnap,
+                          onScaleStart: _onScaleStart,
+                          onScaleUpdate: _onScaleUpdate,
+                          onScaleEnd: _onScaleEnd,
+                          onHandleDragChanged: (dragging) {
+                            setState(() {
+                              _isDraggingCropHandle = dragging;
+                            });
+                          },
+                        ),
+                      ),
+
+                    // Static crop indicator on other tabs (no handles).
+                    if (state.currentTab != EditorTab.crop &&
+                        cropVpRect != null)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(
+                            painter: CropOverlayPainter(cropRect: cropVpRect),
                           ),
                         ),
-
-                      // In other modes: static crop-window indicator (no handles).
-                      if (state.currentTab != EditorTab.crop &&
-                          cropVpRect != null)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              painter: CropOverlayPainter(cropRect: cropVpRect),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
               );
             },
@@ -584,11 +583,16 @@ class _CropOverlayState extends State<CropOverlay> {
   }
 
   /// Clamp [rect] so it never extends outside the viewport (fractions in [0,1]).
-  static CropRect _clampToViewport(CropRect rect) {
+  /// A 16 px horizontal inset is applied on each side so corner handles are
+  /// always fully visible and never clipped at the screen edges.
+  CropRect _clampToViewport(CropRect rect) {
     const minSize = 0.05;
-    final left = rect.left.clamp(0.0, 1.0 - minSize);
+    // Convert 16 px inset to viewport fractions.
+    final hInset =
+        widget.viewportSize.width > 0 ? 16.0 / widget.viewportSize.width : 0.0;
+    final left = rect.left.clamp(hInset, 1.0 - hInset - minSize);
     final top = rect.top.clamp(0.0, 1.0 - minSize);
-    final right = (left + rect.width).clamp(left + minSize, 1.0);
+    final right = (left + rect.width).clamp(left + minSize, 1.0 - hInset);
     final bottom = (top + rect.height).clamp(top + minSize, 1.0);
     return CropRect(
       left: left,

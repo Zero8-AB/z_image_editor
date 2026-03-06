@@ -28,8 +28,6 @@ class _CropControlsState extends State<CropControls> {
 
         return Container(
           padding: const EdgeInsets.only(
-            left: 20,
-            right: 20,
             top: 20,
             bottom: 5,
           ),
@@ -37,60 +35,63 @@ class _CropControlsState extends State<CropControls> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Fine rotation slider
-              Row(
-                children: [
-                  const Icon(
-                    CupertinoIcons.rotate_right,
-                    color: Colors.white70,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Angle',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              '${state.fineRotation.toStringAsFixed(1)}°',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SliderTheme(
-                          data: SliderThemeData(
-                            activeTrackColor: CupertinoColors.systemBlue,
-                            inactiveTrackColor: Colors.white24,
-                            thumbColor: Colors.white,
-                            overlayColor:
-                                CupertinoColors.systemBlue.withOpacity(0.2),
-                            trackHeight: 2,
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 6),
-                          ),
-                          child: Slider(
-                            value: state.fineRotation,
-                            min: -45,
-                            max: 45,
-                            onChanged: widget.controller.setFineRotation,
-                          ),
-                        ),
-                      ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Icon(
+                      CupertinoIcons.rotate_right,
+                      color: Colors.white70,
+                      size: 20,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Angle',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                '${state.fineRotation.toStringAsFixed(1)}°',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SliderTheme(
+                            data: SliderThemeData(
+                              activeTrackColor: CupertinoColors.systemBlue,
+                              inactiveTrackColor: Colors.white24,
+                              thumbColor: Colors.white,
+                              overlayColor:
+                                  CupertinoColors.systemBlue.withOpacity(0.2),
+                              trackHeight: 2,
+                              thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 6),
+                            ),
+                            child: Slider(
+                              value: state.fineRotation,
+                              min: -45,
+                              max: 45,
+                              onChanged: widget.controller.setFineRotation,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               // Aspect ratio presets
               const SizedBox(height: 16),
@@ -106,6 +107,7 @@ class _CropControlsState extends State<CropControls> {
   Widget _buildAspectRatioSelector(ImageEditorState state) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: AspectRatioPreset.values.map((preset) {

@@ -139,8 +139,6 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Tab selector
-
                     // Tool-specific controls
                     Flexible(
                       child: SingleChildScrollView(
@@ -218,7 +216,7 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
 
   Widget _buildTabSelector(ImageEditorState state) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
