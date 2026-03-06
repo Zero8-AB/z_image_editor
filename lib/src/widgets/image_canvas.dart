@@ -33,6 +33,9 @@ class _ImageCanvasState extends State<ImageCanvas>
   /// Last known viewport size (updated on every LayoutBuilder rebuild).
   Size _viewportSize = const Size(100, 100);
 
+  /// Drives the canvas background fade when the user drags a crop handle.
+  bool _isDraggingCropHandle = false;
+
   // ── Snap-to-viewport timer ────────────────────────────────────────────────
   Timer? _snapTimer;
 
@@ -315,8 +318,17 @@ class _ImageCanvasState extends State<ImageCanvas>
           );
         }
 
-        return Container(
-          color: Colors.black,
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(
+            begin: 1.0,
+            end: _isDraggingCropHandle ? 0.0 : 1.0,
+          ),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          builder: (context, bgOpacity, child) => Container(
+            color: const Color(0xFF1C1C1E).withOpacity(bgOpacity),
+            child: child,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final vpSize = Size(constraints.maxWidth, constraints.maxHeight);
@@ -416,6 +428,11 @@ class _ImageCanvasState extends State<ImageCanvas>
                             onScaleStart: _onScaleStart,
                             onScaleUpdate: _onScaleUpdate,
                             onScaleEnd: _onScaleEnd,
+                            onHandleDragChanged: (dragging) {
+                              setState(() {
+                                _isDraggingCropHandle = dragging;
+                              });
+                            },
                           ),
                         ),
 
@@ -502,6 +519,11 @@ class CropOverlay extends StatefulWidget {
   final void Function(ScaleUpdateDetails)? onScaleUpdate;
   final void Function(ScaleEndDetails)? onScaleEnd;
 
+  /// Called with `true` when the user starts dragging a corner/edge handle
+  /// and with `false` when the drag ends.  Used by the parent canvas to
+  /// fade the background so the image shows through.
+  final void Function(bool)? onHandleDragChanged;
+
   const CropOverlay({
     Key? key,
     this.cropRect,
@@ -518,6 +540,7 @@ class CropOverlay extends StatefulWidget {
     this.onScaleStart,
     this.onScaleUpdate,
     this.onScaleEnd,
+    this.onHandleDragChanged,
   }) : super(key: key);
 
   @override
@@ -527,6 +550,11 @@ class CropOverlay extends StatefulWidget {
 class _CropOverlayState extends State<CropOverlay> {
   CropRect? _currentRect;
   CropRect? _dragStartRect;
+
+  /// True while the user is dragging a corner or edge handle — drives the
+  /// overlay opacity animation (0 → transparent when idle, 0.5 → dim when
+  /// resizing so the cropped-out image region is subtly visible).
+  bool _isDraggingHandle = false;
 
   /// Get the target aspect ratio (null = free form)
   double? get _targetAspectRatio => widget.aspectRatioPreset.ratio;
@@ -572,49 +600,6 @@ class _CropOverlayState extends State<CropOverlay> {
 
   /// Variant of [_constrain] used for interior-pan (translate) gestures.
   /// Preserves the user's crop size: instead of shrinking the rect when an
-  /// edge hits a boundary, the position is slid so the box stops at the
-  /// boundary while keeping [previous.width] and [previous.height] intact.
-  CropRect _constrainTranslation(CropRect previous, CropRect proposed) {
-    final constrained = _constrain(proposed);
-    final w = previous.width;
-    final h = previous.height;
-
-    // If size was fully preserved by the normal constraint the whole rect is
-    // within bounds — accept it as-is.
-    if ((constrained.width - w).abs() < 0.001 &&
-        (constrained.height - h).abs() < 0.001) {
-      return constrained;
-    }
-
-    // One or more edges hit a boundary.  Slide position to the boundary
-    // while keeping the original crop size.
-    double newLeft = proposed.left;
-    double newTop = proposed.top;
-
-    // Left boundary hit → slide right.
-    if (constrained.left > proposed.left + 0.001) {
-      newLeft = constrained.left;
-    }
-    // Right boundary hit → slide left.
-    if (constrained.left + constrained.width < proposed.left + w - 0.001) {
-      newLeft = constrained.left + constrained.width - w;
-    }
-    // Top boundary hit → slide down.
-    if (constrained.top > proposed.top + 0.001) {
-      newTop = constrained.top;
-    }
-    // Bottom boundary hit → slide up.
-    if (constrained.top + constrained.height < proposed.top + h - 0.001) {
-      newTop = constrained.top + constrained.height - h;
-    }
-
-    // Final viewport clamp that preserves size.
-    newLeft = newLeft.clamp(0.0, (1.0 - w).clamp(0.0, 1.0));
-    newTop = newTop.clamp(0.0, (1.0 - h).clamp(0.0, 1.0));
-
-    return CropRect(left: newLeft, top: newTop, width: w, height: h);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -714,18 +699,29 @@ class _CropOverlayState extends State<CropOverlay> {
 
         return Stack(
           children: [
-            // Dark overlay outside crop area
+            // Dark overlay outside crop area — animated opacity.
+            // Idle: fully transparent (background color shows through).
+            // Resizing: semi-transparent so the image under the overlay is visible.
             Positioned.fill(
-              child: CustomPaint(
-                painter: CropOverlayPainter(
-                  cropRect: Rect.fromLTWH(left, top, width, height),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(
+                  begin: 1.0,
+                  end: _isDraggingHandle ? 0.5 : 1.0,
+                ),
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                builder: (context, opacity, _) => CustomPaint(
+                  painter: CropOverlayPainter(
+                    cropRect: Rect.fromLTWH(left, top, width, height),
+                    overlayOpacity: opacity,
+                  ),
                 ),
               ),
             ),
 
-            // Crop interior: drag to translate the entire crop box.
-            // Scale gestures (pinch-zoom) are forwarded to the canvas so
-            // zooming works even when fingers land inside the crop area.
+            // Crop interior: all gestures (pan + pinch) move/zoom the image
+            // behind the crop box — exactly like iOS Photos.
+            // Resizing/moving the crop box is done via the edge and corner handles.
             Positioned(
               left: left,
               top: top,
@@ -737,32 +733,10 @@ class _CropOverlayState extends State<CropOverlay> {
                   widget.onScaleStart?.call(details);
                 },
                 onScaleUpdate: (details) {
-                  if (details.pointerCount >= 2 || details.scale != 1.0) {
-                    // Multi-finger gesture → forward to canvas zoom handler.
-                    widget.onScaleUpdate?.call(details);
-                  } else {
-                    // Single-finger → translate crop box.
-                    if (_currentRect == null) return;
-                    final dx =
-                        details.focalPointDelta.dx / constraints.maxWidth;
-                    final dy =
-                        details.focalPointDelta.dy / constraints.maxHeight;
-                    final r = _currentRect!;
-                    final proposed = CropRect(
-                      left: r.left + dx,
-                      top: r.top + dy,
-                      width: r.width,
-                      height: r.height,
-                    );
-                    setState(() {
-                      _currentRect = _constrainTranslation(r, proposed);
-                    });
-                    widget.onCropChanged(_currentRect!);
-                  }
+                  widget.onScaleUpdate?.call(details);
                 },
                 onScaleEnd: (details) {
                   widget.onScaleEnd?.call(details);
-                  widget.onCropDragEnd?.call();
                 },
                 child: CustomPaint(
                   painter: GridPainter(),
@@ -798,7 +772,11 @@ class _CropOverlayState extends State<CropOverlay> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (details) {
-          _dragStartRect = _currentRect;
+          setState(() {
+            _dragStartRect = _currentRect;
+            _isDraggingHandle = true;
+          });
+          widget.onHandleDragChanged?.call(true);
         },
         onPanUpdate: (details) {
           if (_dragStartRect == null) return;
@@ -822,7 +800,11 @@ class _CropOverlayState extends State<CropOverlay> {
           widget.onCropChanged(_currentRect!);
         },
         onPanEnd: (_) {
-          _dragStartRect = null;
+          setState(() {
+            _dragStartRect = null;
+            _isDraggingHandle = false;
+          });
+          widget.onHandleDragChanged?.call(false);
           widget.onCropDragEnd?.call();
         },
         child: Container(
@@ -946,7 +928,11 @@ class _CropOverlayState extends State<CropOverlay> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (details) {
-          _dragStartRect = _currentRect;
+          setState(() {
+            _dragStartRect = _currentRect;
+            _isDraggingHandle = true;
+          });
+          widget.onHandleDragChanged?.call(true);
         },
         onPanUpdate: (details) {
           if (_dragStartRect == null) return;
@@ -1000,7 +986,11 @@ class _CropOverlayState extends State<CropOverlay> {
           widget.onCropChanged(_currentRect!);
         },
         onPanEnd: (_) {
-          _dragStartRect = null;
+          setState(() {
+            _dragStartRect = null;
+            _isDraggingHandle = false;
+          });
+          widget.onHandleDragChanged?.call(false);
           widget.onCropDragEnd?.call();
         },
         child: Container(
@@ -1026,23 +1016,28 @@ class _CropOverlayState extends State<CropOverlay> {
 class CropOverlayPainter extends CustomPainter {
   final Rect cropRect;
 
-  CropOverlayPainter({required this.cropRect});
+  /// 0.0 = fully transparent (shows background), 0.5 = semi-opaque dim.
+  final double overlayOpacity;
+
+  CropOverlayPainter({required this.cropRect, this.overlayOpacity = 0.5});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black.withOpacity(0.5)
-      ..style = PaintingStyle.fill;
+    // Draw dark overlay around crop area (only when opacity > 0).
+    if (overlayOpacity > 0) {
+      final paint = Paint()
+        ..color = const Color(0xFF1C1C1E).withOpacity(overlayOpacity)
+        ..style = PaintingStyle.fill;
 
-    // Draw dark overlay around crop area
-    final path = Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..addRect(cropRect)
-      ..fillType = PathFillType.evenOdd;
+      final path = Path()
+        ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+        ..addRect(cropRect)
+        ..fillType = PathFillType.evenOdd;
 
-    canvas.drawPath(path, paint);
+      canvas.drawPath(path, paint);
+    }
 
-    // Draw white border around crop area
+    // Always draw white border so the crop boundary is always visible.
     final borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
@@ -1053,7 +1048,8 @@ class CropOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CropOverlayPainter oldDelegate) {
-    return oldDelegate.cropRect != cropRect;
+    return oldDelegate.cropRect != cropRect ||
+        oldDelegate.overlayOpacity != overlayOpacity;
   }
 }
 

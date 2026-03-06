@@ -179,14 +179,6 @@ class _MonogramImageEditorState extends State<MonogramImageEditor> {
                   ),
                 ),
               ),
-              // const Text(
-              //   'Edit',
-              //   style: TextStyle(
-              //     color: Colors.white,
-              //     fontSize: 17,
-              //     fontWeight: FontWeight.w600,
-              //   ),
-              // ),
               CupertinoButton(
                 // reset image to default state
                 padding: const EdgeInsets.symmetric(horizontal: 16),
