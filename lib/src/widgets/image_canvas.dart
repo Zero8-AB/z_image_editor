@@ -48,7 +48,7 @@ class _ImageCanvasState extends State<ImageCanvas>
   /// Cancel any pending snap and start a fresh 2-second countdown.
   void _scheduleSnap() {
     _snapTimer?.cancel();
-    _snapTimer = Timer(const Duration(seconds: 1), _onSnapTimer);
+    _snapTimer = Timer(const Duration(seconds: 2), _onSnapTimer);
   }
 
   /// After 2 s of idle the crop box animates to fill the viewport so the user
@@ -497,6 +497,7 @@ class _ImageCanvasState extends State<ImageCanvas>
                           onScaleUpdate: _onScaleUpdate,
                           onScaleEnd: _onScaleEnd,
                           onHandleDragChanged: (dragging) {
+                            if (dragging) _cancelSnap();
                             setState(() {
                               _isDraggingCropHandle = dragging;
                             });
@@ -657,17 +658,20 @@ class _CropOverlayState extends State<CropOverlay> {
   }
 
   /// Clamp [rect] so it never extends outside the viewport (fractions in [0,1]).
-  /// A 16 px horizontal inset is applied on each side so corner handles are
-  /// always fully visible and never clipped at the screen edges.
+  /// A 16 px inset is applied on each side (horizontal and vertical) so corner
+  /// handles are always fully visible and never clipped at the screen edges.
   CropRect _clampToViewport(CropRect rect) {
     const minSize = 0.05;
     // Convert 16 px inset to viewport fractions.
     final hInset =
         widget.viewportSize.width > 0 ? 16.0 / widget.viewportSize.width : 0.0;
+    final vInset = widget.viewportSize.height > 0
+        ? 16.0 / widget.viewportSize.height
+        : 0.0;
     final left = rect.left.clamp(hInset, 1.0 - hInset - minSize);
-    final top = rect.top.clamp(0.0, 1.0 - minSize);
+    final top = rect.top.clamp(vInset, 1.0 - vInset - minSize);
     final right = (left + rect.width).clamp(left + minSize, 1.0 - hInset);
-    final bottom = (top + rect.height).clamp(top + minSize, 1.0);
+    final bottom = (top + rect.height).clamp(top + minSize, 1.0 - vInset);
     return CropRect(
       left: left,
       top: top,
@@ -845,8 +849,8 @@ class _CropOverlayState extends State<CropOverlay> {
   Widget _buildHandle(
       double x, double y, Alignment alignment, BoxConstraints constraints) {
     return Positioned(
-      left: x - 15,
-      top: y - 15,
+      left: x - 22,
+      top: y - 22,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (details) {
@@ -885,19 +889,25 @@ class _CropOverlayState extends State<CropOverlay> {
           widget.onHandleDragChanged?.call(false);
           widget.onCropDragEnd?.call();
         },
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.black, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 4,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 4,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1001,8 +1011,8 @@ class _CropOverlayState extends State<CropOverlay> {
     final isHorizontal = edge == 'top' || edge == 'bottom';
 
     return Positioned(
-      left: x - (isHorizontal ? 15 : 4),
-      top: y - (isHorizontal ? 4 : 15),
+      left: x - (isHorizontal ? 22 : 12),
+      top: y - (isHorizontal ? 12 : 22),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (details) {
@@ -1071,19 +1081,25 @@ class _CropOverlayState extends State<CropOverlay> {
           widget.onHandleDragChanged?.call(false);
           widget.onCropDragEnd?.call();
         },
-        child: Container(
-          width: isHorizontal ? 30 : 8,
-          height: isHorizontal ? 8 : 30,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.black, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 4,
+        child: SizedBox(
+          width: isHorizontal ? 44 : 24,
+          height: isHorizontal ? 24 : 44,
+          child: Center(
+            child: Container(
+              width: isHorizontal ? 30 : 8,
+              height: isHorizontal ? 8 : 30,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.black, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 4,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

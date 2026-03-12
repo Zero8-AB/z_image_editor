@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:z_image_editor/image_editor.dart';
 
 /// Which ruler axis is currently active.
@@ -20,6 +21,7 @@ class _CropControlsState extends State<CropControls> {
   static const double _pxPerDeg = _RulerPainter._pxPerDeg;
 
   _TiltMode _activeMode = _TiltMode.straighten;
+  int? _lastHapticTick;
 
   @override
   Widget build(BuildContext context) {
@@ -99,8 +101,10 @@ class _CropControlsState extends State<CropControls> {
                               value: badges[i].value,
                               maxRange: badges[i].maxRange,
                               selected: _activeMode == badges[i].mode,
-                              onTap: () =>
-                                  setState(() => _activeMode = badges[i].mode),
+                              onTap: () => setState(() {
+                                _activeMode = badges[i].mode;
+                                _lastHapticTick = null;
+                              }),
                             ),
                           ),
                       ],
@@ -117,17 +121,32 @@ class _CropControlsState extends State<CropControls> {
                   onHorizontalDragUpdate: (d) {
                     switch (_activeMode) {
                       case _TiltMode.straighten:
-                        widget.controller.setFineRotation(
-                          (angle - d.delta.dx / _pxPerDeg).clamp(-45.0, 45.0),
-                        );
+                        final newValue =
+                            (angle - d.delta.dx / _pxPerDeg).clamp(-45.0, 45.0);
+                        final tick = newValue.round();
+                        if (tick != _lastHapticTick) {
+                          _lastHapticTick = tick;
+                          HapticFeedback.selectionClick();
+                        }
+                        widget.controller.setFineRotation(newValue);
                       case _TiltMode.vertical:
-                        widget.controller.setTiltVertical(
-                          (tiltV - d.delta.dx / _pxPerDeg).clamp(-30.0, 30.0),
-                        );
+                        final newValue =
+                            (tiltV - d.delta.dx / _pxPerDeg).clamp(-30.0, 30.0);
+                        final tick = newValue.round();
+                        if (tick != _lastHapticTick) {
+                          _lastHapticTick = tick;
+                          HapticFeedback.selectionClick();
+                        }
+                        widget.controller.setTiltVertical(newValue);
                       case _TiltMode.horizontal:
-                        widget.controller.setTiltHorizontal(
-                          (tiltH - d.delta.dx / _pxPerDeg).clamp(-30.0, 30.0),
-                        );
+                        final newValue =
+                            (tiltH - d.delta.dx / _pxPerDeg).clamp(-30.0, 30.0);
+                        final tick = newValue.round();
+                        if (tick != _lastHapticTick) {
+                          _lastHapticTick = tick;
+                          HapticFeedback.selectionClick();
+                        }
+                        widget.controller.setTiltHorizontal(newValue);
                     }
                   },
                   // After lifting the finger, smoothly animate any remaining
