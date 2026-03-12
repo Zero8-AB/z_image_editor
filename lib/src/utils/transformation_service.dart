@@ -38,8 +38,10 @@ class TransformationService {
     // TODO: migrate back to ..translateByDouble once the consuming app has
     // been updated to a Flutter version that ships vector_math ≥ 2.1.5.
     return Matrix4.identity()
+      // ignore: deprecated_member_use
       ..translate(vpCenter.dx, vpCenter.dy, 0.0)
       ..multiply(persp)
+      // ignore: deprecated_member_use
       ..translate(-vpCenter.dx, -vpCenter.dy, 0.0);
   }
 

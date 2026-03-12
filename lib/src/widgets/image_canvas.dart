@@ -408,9 +408,12 @@ class _ImageCanvasState extends State<ImageCanvas>
                   // ..scaleByDouble once the consuming app has been updated
                   // to a Flutter version that ships vector_math ≥ 2.1.5.
                   Matrix4.identity()
+                    // ignore: deprecated_member_use
                     ..translate(state.panOffset.dx, state.panOffset.dy, 0.0)
+                    // ignore: deprecated_member_use
                     ..scale(totalScale, totalScale, 1.0)
                     ..rotateZ(state.totalRotation * math.pi / 180)
+                    // ignore: deprecated_member_use
                     ..scale(
                       state.flipHorizontal ? -1.0 : 1.0,
                       state.flipVertical ? -1.0 : 1.0,
