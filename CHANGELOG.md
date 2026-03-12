@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Zero8-AB/z_image_editor/compare/v0.4.0...v0.4.1) (2026-03-12)
+
+
+### Bug Fixes
+
+* update to newer matrix transformation methods for compatibility ([#16](https://github.com/Zero8-AB/z_image_editor/issues/16)) ([202b016](https://github.com/Zero8-AB/z_image_editor/commit/202b0162774c3293615be3becf766da99ddd0b81))
+
 ## [0.4.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.3.0...v0.4.0) (2026-03-12)
 
 
