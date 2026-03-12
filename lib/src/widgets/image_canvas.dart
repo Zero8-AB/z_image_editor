@@ -404,15 +404,16 @@ class _ImageCanvasState extends State<ImageCanvas>
                 ..setEntry(3, 1,
                     tiltV * TransformationService.kTiltFactor) // rawPerspY
                 ..multiply(
+                  // TODO: migrate back to ..translateByDouble /
+                  // ..scaleByDouble once the consuming app has been updated
+                  // to a Flutter version that ships vector_math ≥ 2.1.5.
                   Matrix4.identity()
-                    ..translateByDouble(
-                        state.panOffset.dx, state.panOffset.dy, 0.0, 1.0)
-                    ..scaleByDouble(totalScale, totalScale, 1.0, 1.0)
+                    ..translate(state.panOffset.dx, state.panOffset.dy, 0.0)
+                    ..scale(totalScale, totalScale, 1.0)
                     ..rotateZ(state.totalRotation * math.pi / 180)
-                    ..scaleByDouble(
+                    ..scale(
                       state.flipHorizontal ? -1.0 : 1.0,
                       state.flipVertical ? -1.0 : 1.0,
-                      1.0,
                       1.0,
                     ),
                 );
