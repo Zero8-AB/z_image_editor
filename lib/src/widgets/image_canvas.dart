@@ -39,6 +39,12 @@ class _ImageCanvasState extends State<ImageCanvas>
   // ── Snap-to-viewport timer ────────────────────────────────────────────────
   Timer? _snapTimer;
 
+  /// Cancel any pending snap without scheduling a new one.
+  void _cancelSnap() {
+    _snapTimer?.cancel();
+    _snapTimer = null;
+  }
+
   /// Cancel any pending snap and start a fresh 2-second countdown.
   void _scheduleSnap() {
     _snapTimer?.cancel();
@@ -81,6 +87,8 @@ class _ImageCanvasState extends State<ImageCanvas>
       panOffset: state.panOffset,
       flipHorizontal: state.flipHorizontal,
       flipVertical: state.flipVertical,
+      tiltHorizontal: state.tiltHorizontal,
+      tiltVertical: state.tiltVertical,
     );
 
     // New user scale (capped at 4×).
@@ -103,6 +111,8 @@ class _ImageCanvasState extends State<ImageCanvas>
       panOffset: Offset.zero,
       flipHorizontal: state.flipHorizontal,
       flipVertical: state.flipVertical,
+      tiltHorizontal: state.tiltHorizontal,
+      tiltVertical: state.tiltVertical,
     );
     final newPan = vpCenter - vpPointZeroPan;
 
@@ -136,11 +146,23 @@ class _ImageCanvasState extends State<ImageCanvas>
       duration: const Duration(milliseconds: 250),
     );
     widget.controller.setAnimationController(_animationController);
+    widget.controller.registerCancelSnapCallback(_cancelSnap);
+  }
+
+  @override
+  void didUpdateWidget(ImageCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.unregisterCancelSnapCallback();
+      widget.controller.setAnimationController(_animationController);
+      widget.controller.registerCancelSnapCallback(_cancelSnap);
+    }
   }
 
   @override
   void dispose() {
     _snapTimer?.cancel();
+    widget.controller.unregisterCancelSnapCallback();
     widget.controller.disposeAnimationController();
     _animationController.dispose();
     super.dispose();
@@ -171,6 +193,8 @@ class _ImageCanvasState extends State<ImageCanvas>
             imageSize: _imageSize!,
             viewportSize: vpSize,
             rotationDegrees: state.totalRotation,
+            tiltHorizontal: state.tiltHorizontal,
+            tiltVertical: state.tiltVertical,
           )
         : 1.0;
     final newUserScale =
@@ -209,6 +233,8 @@ class _ImageCanvasState extends State<ImageCanvas>
         totalScale: totalScale,
         flipHorizontal: state.flipHorizontal,
         flipVertical: state.flipVertical,
+        tiltHorizontal: state.tiltHorizontal,
+        tiltVertical: state.tiltVertical,
       );
     } else {
       clampedPan = transformationService.clampPanOffset(
@@ -242,6 +268,8 @@ class _ImageCanvasState extends State<ImageCanvas>
         totalScale: totalScale,
         flipHorizontal: state.flipHorizontal,
         flipVertical: state.flipVertical,
+        tiltHorizontal: state.tiltHorizontal,
+        tiltVertical: state.tiltVertical,
       );
     } else {
       clamped = transformationService.clampPanOffset(
@@ -357,31 +385,36 @@ class _ImageCanvasState extends State<ImageCanvas>
               }
 
               // ── Single unified Transform ──────────────────────────────────
-              // Matrix: T(pan) * S(minScale·userScale) * R(angle) * S(flip)
-              // with pivot at Alignment.center (= viewport centre = image centre
-              // for BoxFit.contain).
-              //
-              // All components live in the SAME widget tree, so rotation,
-              // scale-compensation, user-zoom and pan are always in sync with
-              // no one-frame lag or double-application.
+              // Matrix: [perspRaw] * T(pan) * S(minScale·userScale) * R(angle) * S(flip)
+              // The raw perspective entries are pre-multiplied before the affine
+              // chain; Flutter's alignment: Alignment.center adds the viewport-
+              // centre pivot, so the effective matrix is:
+              //   T(vpCx) × perspRaw × affineRaw × T(-vpCx)
+              // = buildPerspectiveMatrix(pivoted) × affineFull  (WYSIWYG match)
               final totalScale = state.minScaleForRotation * state.scale;
+              final tiltH = state.tiltHorizontal;
+              final tiltV = state.tiltVertical;
+              final Matrix4 displayMatrix = Matrix4.identity()
+                ..setEntry(3, 0,
+                    tiltH * TransformationService.kTiltFactor) // rawPerspX
+                ..setEntry(3, 1,
+                    tiltV * TransformationService.kTiltFactor) // rawPerspY
+                ..multiply(
+                  Matrix4.identity()
+                    ..translateByDouble(
+                        state.panOffset.dx, state.panOffset.dy, 0.0, 1.0)
+                    ..scaleByDouble(totalScale, totalScale, 1.0, 1.0)
+                    ..rotateZ(state.totalRotation * math.pi / 180)
+                    ..scaleByDouble(
+                      state.flipHorizontal ? -1.0 : 1.0,
+                      state.flipVertical ? -1.0 : 1.0,
+                      1.0,
+                      1.0,
+                    ),
+                );
               final transformedImage = Transform(
                 alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..translateByDouble(
-                    state.panOffset.dx,
-                    state.panOffset.dy,
-                    0.0,
-                    1.0,
-                  )
-                  ..scaleByDouble(totalScale, totalScale, 1.0, 1.0)
-                  ..rotateZ(state.totalRotation * math.pi / 180)
-                  ..scaleByDouble(
-                    state.flipHorizontal ? -1.0 : 1.0,
-                    state.flipVertical ? -1.0 : 1.0,
-                    1.0,
-                    1.0,
-                  ),
+                transform: displayMatrix,
                 // SizedBox ensures the Image widget receives tight constraints
                 // equal to the viewport so BoxFit.contain letterboxes correctly
                 // and the transform pivots at the image centre.
@@ -455,6 +488,8 @@ class _ImageCanvasState extends State<ImageCanvas>
                           panOffset: state.panOffset,
                           flipHorizontal: state.flipHorizontal,
                           flipVertical: state.flipVertical,
+                          tiltHorizontal: state.tiltHorizontal,
+                          tiltVertical: state.tiltVertical,
                           aspectRatioPreset: state.aspectRatioPreset,
                           onCropChanged: widget.controller.setCropRect,
                           onCropDragEnd: _scheduleSnap,
@@ -536,6 +571,8 @@ class CropOverlay extends StatefulWidget {
   final Offset panOffset;
   final bool flipHorizontal;
   final bool flipVertical;
+  final double tiltHorizontal;
+  final double tiltVertical;
 
   final AspectRatioPreset aspectRatioPreset;
   final Function(CropRect) onCropChanged;
@@ -566,6 +603,8 @@ class CropOverlay extends StatefulWidget {
     required this.panOffset,
     required this.flipHorizontal,
     required this.flipVertical,
+    this.tiltHorizontal = 0.0,
+    this.tiltVertical = 0.0,
     this.aspectRatioPreset = AspectRatioPreset.free,
     required this.onCropChanged,
     this.onCropDragEnd,
@@ -610,6 +649,8 @@ class _CropOverlayState extends State<CropOverlay> {
         panOffset: widget.panOffset,
         flipHorizontal: widget.flipHorizontal,
         flipVertical: widget.flipVertical,
+        tiltHorizontal: widget.tiltHorizontal,
+        tiltVertical: widget.tiltVertical,
       );
     }
     return _clampToViewport(rect);
