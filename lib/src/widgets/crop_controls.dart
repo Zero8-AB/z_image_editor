@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:z_image_editor/image_editor.dart';
 
@@ -50,34 +51,62 @@ class _CropControlsState extends State<CropControls> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // — badges row: straighten · vertical tilt · horizontal tilt
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _ModeBadge(
-                    label: '\u21ba',
-                    value: angle,
-                    selected: _activeMode == _TiltMode.straighten,
-                    onTap: () =>
-                        setState(() => _activeMode = _TiltMode.straighten),
-                  ),
-                  const SizedBox(width: 16),
-                  _ModeBadge(
-                    label: '\u2195',
-                    value: tiltV,
-                    selected: _activeMode == _TiltMode.vertical,
-                    onTap: () =>
-                        setState(() => _activeMode = _TiltMode.vertical),
-                  ),
-                  const SizedBox(width: 16),
-                  _ModeBadge(
-                    label: '\u2194',
-                    value: tiltH,
-                    selected: _activeMode == _TiltMode.horizontal,
-                    onTap: () =>
-                        setState(() => _activeMode = _TiltMode.horizontal),
-                  ),
-                ],
+              // — badges row: selected badge is always centred; others slide.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  // Centre of the available width.
+                  final cx = constraints.maxWidth / 2;
+                  // Badge width (52) + gap (16) = one step.
+                  const step = 68.0;
+                  const half = 26.0; // half badge width for centering
+                  final selectedIdx = _activeMode.index; // 0, 1, 2
+
+                  final badges = [
+                    (
+                      mode: _TiltMode.straighten,
+                      icon: CupertinoIcons.arrow_clockwise,
+                      value: angle,
+                      maxRange: 45.0,
+                    ),
+                    (
+                      mode: _TiltMode.vertical,
+                      icon: CupertinoIcons.arrow_up_down,
+                      value: tiltV,
+                      maxRange: 30.0,
+                    ),
+                    (
+                      mode: _TiltMode.horizontal,
+                      icon: CupertinoIcons.arrow_left_right,
+                      value: tiltH,
+                      maxRange: 30.0,
+                    ),
+                  ];
+
+                  return SizedBox(
+                    height: 52,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        for (int i = 0; i < badges.length; i++)
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            // Shift so selected badge sits exactly at cx.
+                            left: cx + (i - selectedIdx) * step - half,
+                            top: 0,
+                            child: _ModeBadge(
+                              icon: badges[i].icon,
+                              value: badges[i].value,
+                              maxRange: badges[i].maxRange,
+                              selected: _activeMode == badges[i].mode,
+                              onTap: () =>
+                                  setState(() => _activeMode = badges[i].mode),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 10),
               // — ruler (controls active mode)
@@ -124,67 +153,137 @@ class _CropControlsState extends State<CropControls> {
 
 // ── Circular mode badge ───────────────────────────────────────────────────────
 
-/// Badge that shows the mode icon (label) when value is near-zero, or the
-/// numeric value when adjusted. Highlights in yellow when selected and non-zero.
+const _kYellow = Color(0xFFFFCC00);
+
+/// Circular badge showing mode icon + arc-fill border indicating the value.
+///
+/// When NOT selected: always shows the [icon]; arc fill in yellow (positive)
+/// or white (negative) proportional to |value|/[maxRange].
+///
+/// When selected and non-zero: shows the numeric value instead of the icon
+/// (same colour rule). When selected and zero: shows the icon.
 class _ModeBadge extends StatelessWidget {
-  final String label;
+  final IconData icon;
   final double value;
+  final double maxRange;
   final bool selected;
   final VoidCallback onTap;
 
   const _ModeBadge({
-    required this.label,
+    required this.icon,
     required this.value,
+    required this.maxRange,
     required this.selected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bool isNonZero = value.abs() > 0.05;
+    final bool isPositive = value > 0.05;
+    final bool isNegative = value < -0.05;
+    final bool isNonZero = isPositive || isNegative;
 
-    final Color borderColor;
-    final Color textColor;
-    if (isNonZero && selected) {
-      borderColor = const Color(0xFFFFCC00);
-      textColor = const Color(0xFFFFCC00);
-    } else if (isNonZero) {
-      borderColor = Colors.white54;
-      textColor = Colors.white70;
-    } else if (selected) {
-      borderColor = Colors.white70;
-      textColor = Colors.white70;
+    final Color valueColor;
+    if (isPositive) {
+      valueColor = _kYellow;
+    } else if (isNegative) {
+      valueColor = Colors.white;
     } else {
-      borderColor = Colors.white24;
-      textColor = Colors.white38;
+      valueColor = selected ? Colors.white70 : Colors.white38;
     }
 
-    final String displayText = isNonZero
-        ? '${value > 0 ? '+' : ''}${value.toStringAsFixed(1)}'
-        : label;
+    // When selected and non-zero show the numeric value; otherwise show icon.
+    final Widget centre;
+    if (selected && isNonZero) {
+      centre = Text(
+        '${value > 0 ? '+' : ''}${value.toStringAsFixed(1)}',
+        style: TextStyle(
+          color: valueColor,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    } else {
+      centre = Icon(icon, color: valueColor, size: 16);
+    }
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: borderColor, width: 1.5),
+      child: CustomPaint(
+        painter: _BadgeArcPainter(
+          value: value,
+          maxRange: maxRange,
+          color: valueColor,
         ),
-        child: Center(
-          child: Text(
-            displayText,
-            style: TextStyle(
-              color: textColor,
-              fontSize: isNonZero ? 11 : 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        child: SizedBox(
+          width: 52,
+          height: 52,
+          child: Center(child: centre),
         ),
       ),
     );
   }
+}
+
+// ── Arc painter for badge border ─────────────────────────────────────────────
+
+/// Paints a dim full-circle track plus a coloured arc whose sweep encodes
+/// both the magnitude and sign of [value]:
+///
+///   positive → clockwise from 12-o'clock   (right side fills first)
+///   negative → counter-clockwise from 12-o'clock  (left side fills first)
+///
+/// Sweep angle = (|value| / [maxRange]) × 360°, so the full range = full circle.
+class _BadgeArcPainter extends CustomPainter {
+  final double value;
+  final double maxRange;
+  final Color color;
+
+  const _BadgeArcPainter({
+    required this.value,
+    required this.maxRange,
+    required this.color,
+  });
+
+  static const double _strokeWidth = 2.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - _strokeWidth / 2;
+
+    // Dim track — always present so the badge shape is always visible.
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.12)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _strokeWidth,
+    );
+
+    if (value.abs() < 0.05) return;
+
+    final double fraction = (value.abs() / maxRange).clamp(0.0, 1.0);
+    // Clockwise for positive (fills right side), CCW for negative (fills left).
+    final double sweep = (value > 0 ? 1.0 : -1.0) * fraction * 2 * math.pi;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2, // start at 12-o'clock
+      sweep,
+      false,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _strokeWidth
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BadgeArcPainter old) =>
+      old.value != value || old.maxRange != maxRange || old.color != color;
 }
 
 // ── Ruler painter ─────────────────────────────────────────────────────────────
