@@ -1,4 +1,4 @@
-import 'package:monogram_image_editor/src/controller/image_editor_controller.dart';
+import 'package:z_image_editor/src/controller/image_editor_controller.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -8,9 +8,9 @@ class RotationControls extends StatelessWidget {
   final ImageEditorController controller;
 
   const RotationControls({
-    Key? key,
+    super.key,
     required this.controller,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

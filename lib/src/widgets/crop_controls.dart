@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:monogram_image_editor/image_editor.dart';
+import 'package:z_image_editor/image_editor.dart';
 
 /// Crop controls — iOS-style angle badge + ruler slider.
 class CropControls extends StatefulWidget {

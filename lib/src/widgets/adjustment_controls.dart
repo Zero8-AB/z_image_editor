@@ -1,6 +1,7 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:monogram_image_editor/image_editor.dart';
+import 'package:z_image_editor/image_editor.dart';
 
 enum _AdjParam { brightness, contrast, saturation }
 
