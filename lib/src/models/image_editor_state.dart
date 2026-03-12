@@ -173,7 +173,6 @@ class ImageEditorState {
 enum EditorTab {
   crop,
   adjust,
-  rotate,
 }
 
 /// Represents a crop rectangle

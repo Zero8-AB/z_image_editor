@@ -210,7 +210,16 @@ class _ZImageEditorState extends State<ZImageEditor> {
                 ],
               ),
             ),
-            if (state.currentTab == EditorTab.crop) _buildCropToolbar(state),
+            // Always keep the crop toolbar in the layout so the canvas height
+            // stays constant across tabs (changing it would shift the image
+            // position under BoxFit.contain).
+            Visibility(
+              visible: state.currentTab == EditorTab.crop,
+              maintainSize: true,
+              maintainAnimation: true,
+              maintainState: true,
+              child: _buildCropToolbar(state),
+            ),
           ],
         ),
       ),
@@ -448,13 +457,18 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   Widget _buildToolControls(ImageEditorState state) {
-    switch (state.currentTab) {
-      case EditorTab.crop:
-        return CropControls(controller: _controller);
-      case EditorTab.adjust:
-        return AdjustmentControls(controller: _controller);
-      case EditorTab.rotate:
-        return const SizedBox.shrink();
-    }
+    final index = switch (state.currentTab) {
+      EditorTab.crop => 0,
+      EditorTab.adjust => 1,
+    };
+    // IndexedStack keeps all panels in the layout tree simultaneously, so the
+    // canvas always receives the same height regardless of which tab is active.
+    return IndexedStack(
+      index: index,
+      children: [
+        CropControls(controller: _controller),
+        AdjustmentControls(controller: _controller),
+      ],
+    );
   }
 }

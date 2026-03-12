@@ -65,10 +65,14 @@ class _ImageCanvasState extends State<ImageCanvas>
     final cw = cropRect.width * vpW;
     final ch = cropRect.height * vpH;
 
-    // Scale factor to make the crop box exactly fill the viewport
-    // (fit within viewport, preserving aspect ratio).
-    final s = math.min(vpW / cw, vpH / ch);
-    if (s <= 1.01) return; // already fills the viewport — nothing to do
+    // Leave 16 px on each edge so corner handles are never clipped.
+    const inset = 16.0;
+    final availW = vpW - 2 * inset;
+    final availH = vpH - 2 * inset;
+
+    // Scale factor to fit the crop box inside the available (inset) area.
+    final s = math.min(availW / cw, availH / ch);
+    if (s <= 1.01) return; // already fills the available area — nothing to do
 
     final minScaleForRotation = state.minScaleForRotation;
     final currentTotalScale = minScaleForRotation * state.scale;
@@ -435,31 +439,35 @@ class _ImageCanvasState extends State<ImageCanvas>
                     )
                   : null;
 
-              // ── Adjust tab: static crop-filled view, no gestures ──────────
-              // When the user switches to Adjust, show only the cropped region
-              // filling the canvas (the same result they'll export), with live
-              // color-filter preview.  No pan/zoom/crop handles are shown.
+              // ── Adjust tab: same canvas as Crop tab, no handles ───────────
+              // Render the full transformed image, then paint an opaque
+              // background over everything outside the crop rect — identical
+              // to how the Crop tab looks at rest (overlay opacity 1.0) but
+              // without the white border.  Using the overlay approach (rather
+              // than hard-clipping) guarantees pixel-perfect parity: the
+              // visible image content is exactly what sits inside the crop box
+              // in the Crop tab, with no coordinate-space discrepancy.
               if (state.currentTab == EditorTab.adjust) {
-                Widget adjustView;
-                if (cropVpRect != null) {
-                  final cw = cropVpRect.width;
-                  final ch = cropVpRect.height;
-                  final s = math.min(vpSize.width / cw, vpSize.height / ch);
-                  final dx = vpSize.width / 2 - s * cropVpRect.center.dx;
-                  final dy = vpSize.height / 2 - s * cropVpRect.center.dy;
-                  adjustView = ClipRect(
-                    child: Transform(
-                      transform: Matrix4.identity()
-                        ..translateByDouble(dx, dy, 0.0, 1.0)
-                        ..scaleByDouble(s, s, 1.0, 1.0),
-                      child: ClipRect(child: transformedImage),
-                    ),
-                  );
-                } else {
-                  // No crop set — just show the full image, static.
-                  adjustView = ClipRect(child: transformedImage);
-                }
-                return adjustView;
+                return ClipRect(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRect(child: transformedImage),
+                      if (cropVpRect != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: CropOverlayPainter(
+                                cropRect: cropVpRect,
+                                overlayOpacity: 1.0,
+                                showBorder: false,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
               }
 
               return GestureDetector(
@@ -638,6 +646,8 @@ class _CropOverlayState extends State<CropOverlay> {
 
   /// Constrain [rect] so every corner stays inside the visible image AND
   /// inside the viewport bounds [0, 1] × [0, 1].
+  /// A 16 px inset is applied on each side so corner handles are always
+  /// fully visible and never clipped at the screen edges.
   /// Falls back to viewport-only clamping when imageSize is not yet known.
   CropRect _constrain(CropRect rect) {
     if (_canConstrain) {
@@ -692,7 +702,6 @@ class _CropOverlayState extends State<CropOverlay> {
     if (widget.cropRect != null) {
       _currentRect = _constrain(widget.cropRect!);
     } else if (_canConstrain) {
-      // Default: image-filling rect (will be constrained automatically).
       _currentRect = _constrain(const CropRect(
         left: 0,
         top: 0,
@@ -714,7 +723,6 @@ class _CropOverlayState extends State<CropOverlay> {
     if (widget.cropRect != oldWidget.cropRect) {
       final incoming = widget.cropRect;
       if (incoming == null) {
-        // Re-initialise to image-filling default.
         if (_canConstrain) {
           _currentRect =
               _constrain(const CropRect(left: 0, top: 0, width: 1, height: 1));
@@ -1113,7 +1121,15 @@ class CropOverlayPainter extends CustomPainter {
   /// 0.0 = fully transparent (shows background), 0.5 = semi-opaque dim.
   final double overlayOpacity;
 
-  CropOverlayPainter({required this.cropRect, this.overlayOpacity = 0.5});
+  /// Whether to draw the 2 px white crop border.  Set to false on the Adjust
+  /// tab where the clean crop preview should have no visible border.
+  final bool showBorder;
+
+  CropOverlayPainter({
+    required this.cropRect,
+    this.overlayOpacity = 0.5,
+    this.showBorder = true,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1131,19 +1147,23 @@ class CropOverlayPainter extends CustomPainter {
       canvas.drawPath(path, paint);
     }
 
-    // Always draw white border so the crop boundary is always visible.
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    if (showBorder) {
+      // The stroke is drawn on an inflated rect so the inner edge of the 2 px
+      // stroke lands exactly on cropRect — no bleed inside the image area.
+      final borderPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
 
-    canvas.drawRect(cropRect, borderPaint);
+      canvas.drawRect(cropRect.inflate(1), borderPaint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant CropOverlayPainter oldDelegate) {
     return oldDelegate.cropRect != cropRect ||
-        oldDelegate.overlayOpacity != overlayOpacity;
+        oldDelegate.overlayOpacity != overlayOpacity ||
+        oldDelegate.showBorder != showBorder;
   }
 }
 
