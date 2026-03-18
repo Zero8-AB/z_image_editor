@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/Zero8-AB/z_image_editor/compare/v0.5.0...v0.5.1) (2026-03-18)
+
+
+### Bug Fixes
+
+* Fix/magnifying glass precision ([#26](https://github.com/Zero8-AB/z_image_editor/issues/26)) ([0ba0f13](https://github.com/Zero8-AB/z_image_editor/commit/0ba0f136b39ca24fb80e81c2fe2aed303fd00edf))
+
 ## [0.5.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.4.1...v0.5.0) (2026-03-18)
 
 
