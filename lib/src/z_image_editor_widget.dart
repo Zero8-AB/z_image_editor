@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:z_image_editor/src/controller/image_editor_controller.dart';
+import 'package:z_image_editor/src/models/adjust_tab_settings.dart';
+import 'package:z_image_editor/src/models/crop_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_toolbar_settings.dart';
 import 'package:z_image_editor/src/models/image_editor_state.dart';
 import 'package:z_image_editor/src/utils/image_processing.dart';
@@ -38,6 +40,20 @@ class ZImageEditor extends StatefulWidget {
   /// Only relevant when [showCropToolbar] is `true`.
   final CropToolbarSettings cropToolbarSettings;
 
+  /// Whether to show the Crop tab. Defaults to `true`.
+  final bool showCropTab;
+
+  /// Fine-grained control over which badges appear in the Crop tab ruler.
+  /// Only relevant when [showCropTab] is `true`.
+  final CropTabSettings cropTabSettings;
+
+  /// Whether to show the Adjust tab. Defaults to `true`.
+  final bool showAdjustTab;
+
+  /// Fine-grained control over which badges appear in the Adjust tab ruler.
+  /// Only relevant when [showAdjustTab] is `true`.
+  final AdjustTabSettings adjustTabSettings;
+
   const ZImageEditor({
     super.key,
     this.imageFile,
@@ -50,6 +66,10 @@ class ZImageEditor extends StatefulWidget {
     this.doneLabel = 'Done',
     this.showCropToolbar = true,
     this.cropToolbarSettings = const CropToolbarSettings(),
+    this.showCropTab = true,
+    this.cropTabSettings = const CropTabSettings(),
+    this.showAdjustTab = true,
+    this.adjustTabSettings = const AdjustTabSettings(),
   }) : assert(imageFile != null || imageBytes != null,
             'Either imageFile or imageBytes must be provided');
 
@@ -69,6 +89,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
       imageFile: widget.imageFile,
       imageBytes: widget.imageBytes,
     );
+    // Default to the first visible tab.
+    if (!widget.showCropTab && widget.showAdjustTab) {
+      _controller.setTab(EditorTab.adjust);
+    }
   }
 
   @override
@@ -409,6 +433,26 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   Widget _buildTabSelector(ImageEditorState state) {
+    final tabs = [
+      if (widget.showCropTab)
+        _buildTab(
+          icon: CupertinoIcons.crop,
+          label: 'Crop',
+          isSelected: state.currentTab == EditorTab.crop,
+          onTap: () => _controller.setTab(EditorTab.crop),
+        ),
+      if (widget.showAdjustTab)
+        _buildTab(
+          icon: CupertinoIcons.slider_horizontal_3,
+          label: 'Adjust',
+          isSelected: state.currentTab == EditorTab.adjust,
+          onTap: () => _controller.setTab(EditorTab.adjust),
+        ),
+    ];
+
+    // Fewer than two tabs means there's nothing to switch between.
+    if (tabs.length < 2) return const SizedBox(height: 22);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
       child: Center(
@@ -430,20 +474,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildTab(
-                    icon: CupertinoIcons.crop,
-                    label: 'Crop',
-                    isSelected: state.currentTab == EditorTab.crop,
-                    onTap: () => _controller.setTab(EditorTab.crop),
-                  ),
-                  _buildTab(
-                    icon: CupertinoIcons.slider_horizontal_3,
-                    label: 'Adjust',
-                    isSelected: state.currentTab == EditorTab.adjust,
-                    onTap: () => _controller.setTab(EditorTab.adjust),
-                  ),
-                ],
+                children: tabs,
               ),
             ),
           ),
@@ -499,8 +530,14 @@ class _ZImageEditorState extends State<ZImageEditor> {
     return IndexedStack(
       index: index,
       children: [
-        CropControls(controller: _controller),
-        AdjustmentControls(controller: _controller),
+        CropControls(
+          controller: _controller,
+          settings: widget.cropTabSettings,
+        ),
+        AdjustmentControls(
+          controller: _controller,
+          settings: widget.adjustTabSettings,
+        ),
       ],
     );
   }

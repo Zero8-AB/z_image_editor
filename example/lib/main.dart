@@ -54,6 +54,27 @@ class _HomePageState extends State<HomePage> {
           MaterialPageRoute(
             fullscreenDialog: true,
             builder: (context) => ZImageEditor(
+              showAdjustTab: true,
+              showCropTab: true,
+              showCropToolbar: true,
+              adjustTabSettings: const AdjustTabSettings(
+                showBrightness: true,
+                showContrast: true,
+                showSaturation: true,
+              ),
+              cropTabSettings: const CropTabSettings(
+                showStraighten: true,
+                showTiltVertical: true,
+                showTiltHorizontal: true,
+              ),
+              cropToolbarSettings: const CropToolbarSettings(
+                showRotate: true,
+                showFlipHorizontal: true,
+                showFlipVertical: true,
+                showAspectRatio: true,
+              ),
+              cancelLabel: 'Cancel',
+              resetLabel: 'Reset',
               doneLabel: 'Save',
               enableMagnifyingGlass: true,
               imageFile: File(pickedFile.path),
