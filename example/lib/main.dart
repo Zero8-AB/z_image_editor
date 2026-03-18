@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:z_image_editor/image_editor.dart';
 import 'package:z_image_editor/z_image_editor.dart';
 
 void main() {
@@ -53,6 +54,7 @@ class _HomePageState extends State<HomePage> {
           MaterialPageRoute(
             fullscreenDialog: true,
             builder: (context) => ZImageEditor(
+              doneLabel: 'Save',
               enableMagnifyingGlass: true,
               imageFile: File(pickedFile.path),
               onSave: (File edited) {
