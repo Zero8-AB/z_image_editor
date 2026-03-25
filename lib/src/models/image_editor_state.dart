@@ -42,7 +42,7 @@ class ImageEditorState {
     this.panOffset = Offset.zero,
     this.displaySize,
     this.imageSize,
-    this.currentTab = EditorTab.crop,
+    this.currentTab = EditorTab.adjust,
     this.isProcessing = false,
     this.aspectRatioPreset = AspectRatioPreset.free,
     this.tiltHorizontal = 0.0,
