@@ -179,6 +179,7 @@ class _ImageCanvasState extends State<ImageCanvas>
   // ── Gesture handlers ───────────────────────────────────────────────────────
 
   void _onScaleStart(ScaleStartDetails details) {
+    widget.controller.beginGesture();
     _snapTimer?.cancel(); // don't snap while user is actively interacting
     _gestureStartPan = widget.controller.state.panOffset;
     _gestureStartUserScale = widget.controller.state.scale;
@@ -509,6 +510,8 @@ class _ImageCanvasState extends State<ImageCanvas>
                           aspectRatioPreset: state.aspectRatioPreset,
                           onCropChanged: widget.controller.setCropRect,
                           onCropDragEnd: _scheduleSnap,
+                          onCropDragStart: () =>
+                              widget.controller.beginGesture(),
                           onScaleStart: _onScaleStart,
                           onScaleUpdate: _onScaleUpdate,
                           onScaleEnd: _onScaleEnd,
@@ -633,6 +636,10 @@ class CropOverlay extends StatefulWidget {
   /// snap-to-viewport animation.
   final VoidCallback? onCropDragEnd;
 
+  /// Called when the user first touches a crop corner or edge handle.
+  /// The canvas uses this to record an undo snapshot before the drag begins.
+  final VoidCallback? onCropDragStart;
+
   /// Forwarded to the canvas's _onScaleStart/Update/End so that pinch-zoom
   /// gestures begun inside the crop interior reach the image transform logic.
   final void Function(ScaleStartDetails)? onScaleStart;
@@ -668,6 +675,7 @@ class CropOverlay extends StatefulWidget {
     this.aspectRatioPreset = AspectRatioPreset.free,
     required this.onCropChanged,
     this.onCropDragEnd,
+    this.onCropDragStart,
     this.onScaleStart,
     this.onScaleUpdate,
     this.onScaleEnd,
@@ -979,6 +987,7 @@ class _CropOverlayState extends State<CropOverlay> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (details) {
+          widget.onCropDragStart?.call();
           setState(() {
             _dragStartRect = _currentRect;
             _isDraggingHandle = true;
@@ -1172,6 +1181,7 @@ class _CropOverlayState extends State<CropOverlay> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (details) {
+          widget.onCropDragStart?.call();
           setState(() {
             _dragStartRect = _currentRect;
             _isDraggingHandle = true;

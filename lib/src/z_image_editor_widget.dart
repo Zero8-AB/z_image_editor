@@ -79,6 +79,7 @@ class ZImageEditor extends StatefulWidget {
 
 class _ZImageEditorState extends State<ZImageEditor> {
   bool _isSaving = false;
+  bool _showingAspectRatioPicker = false;
   late ImageEditorController _controller;
   OverlayEntry? _editMenuOverlay;
 
@@ -219,15 +220,23 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
   Widget _buildHeader(BuildContext context, ImageEditorState state) {
     final topPadding = MediaQuery.of(context).padding.top;
+    final isAndroid = Platform.isAndroid;
     return Container(
       color: const Color(0xFF1C1C1E),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // On Android, add a status-bar-height spacer above the buttons so
+          // they sit below the status bar. On iOS, the buttons are positioned
+          // inside the notch safe-area height (topPadding), which is already
+          // tall enough to contain the small CupertinoButtons.
+          if (isAndroid) SizedBox(height: topPadding),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            height: topPadding,
+            padding: isAndroid
+                ? const EdgeInsets.symmetric(horizontal: 40, vertical: 20)
+                : const EdgeInsets.symmetric(horizontal: 40),
+            height: isAndroid ? null : topPadding,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -320,18 +329,24 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   children: [
                     const SizedBox(width: 12),
                     InkWell(
-                      onTap: () {},
-                      child: const Icon(
+                      onTap:
+                          _controller.canUndo ? () => _controller.undo() : null,
+                      child: Icon(
                         CupertinoIcons.arrow_uturn_left,
-                        color: CupertinoColors.white,
+                        color: _controller.canUndo
+                            ? CupertinoColors.white
+                            : CupertinoColors.white.withValues(alpha: 0.3),
                       ),
                     ),
                     const SizedBox(width: 22),
                     InkWell(
-                      onTap: () {},
-                      child: const Icon(
+                      onTap:
+                          _controller.canRedo ? () => _controller.redo() : null,
+                      child: Icon(
                         CupertinoIcons.arrow_uturn_right,
-                        color: CupertinoColors.white,
+                        color: _controller.canRedo
+                            ? CupertinoColors.white
+                            : CupertinoColors.white.withValues(alpha: 0.3),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -441,27 +456,31 @@ class _ZImageEditorState extends State<ZImageEditor> {
                         children: [
                           const SizedBox(width: 12),
                           InkWell(
-                            onTap: () => _showAspectRatioPicker(state),
+                            onTap: () {
+                              setState(() {
+                                _showingAspectRatioPicker =
+                                    !_showingAspectRatioPicker;
+                              });
+                            },
                             child: Icon(
                               CupertinoIcons.crop,
                               size: 22,
-                              color: state.aspectRatioPreset !=
-                                      AspectRatioPreset.free
-                                  ? CupertinoColors.systemBlue
-                                  : Colors.white,
+                              color: _showingAspectRatioPicker
+                                  ? CupertinoColors.systemYellow
+                                  : state.aspectRatioPreset !=
+                                          AspectRatioPreset.free
+                                      ? CupertinoColors.systemBlue
+                                      : Colors.white,
                             ),
                           ),
                           const SizedBox(width: 22),
                           Builder(
                             builder: (btnCtx) => InkWell(
                               onTap: () => _showEditMenu(btnCtx),
-                              child: Icon(
+                              child: const Icon(
                                 CupertinoIcons.ellipsis,
                                 size: 22,
-                                color: state.aspectRatioPreset !=
-                                        AspectRatioPreset.free
-                                    ? CupertinoColors.systemBlue
-                                    : Colors.white,
+                                color: Colors.white,
                               ),
                             ),
                           ),
@@ -530,10 +549,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
                     _buildEditMenuItem(
                       CupertinoIcons.arrow_uturn_left,
                       'Undo',
-                      () {
-                        _dismissEditMenu();
-                        // TODO: _controller.undo()
-                      },
+                      _controller.canUndo
+                          ? () {
+                              _dismissEditMenu();
+                              _controller.undo();
+                            }
+                          : null,
                     ),
                     const Divider(
                       height: 1,
@@ -545,10 +566,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
                     _buildEditMenuItem(
                       CupertinoIcons.arrow_uturn_right,
                       'Redo',
-                      () {
-                        _dismissEditMenu();
-                        // TODO: _controller.redo()
-                      },
+                      _controller.canRedo
+                          ? () {
+                              _dismissEditMenu();
+                              _controller.redo();
+                            }
+                          : null,
                     ),
                   ],
                 ),
@@ -561,7 +584,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
     overlayState.insert(_editMenuOverlay!);
   }
 
-  Widget _buildEditMenuItem(IconData icon, String label, VoidCallback onTap) {
+  Widget _buildEditMenuItem(IconData icon, String label, VoidCallback? onTap) {
+    final disabled = onTap == null;
     return InkWell(
       onTap: onTap,
       child: SizedBox(
@@ -570,14 +594,20 @@ class _ZImageEditorState extends State<ZImageEditor> {
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 22),
+              Icon(icon,
+                  color: disabled
+                      ? Colors.white.withValues(alpha: 0.3)
+                      : Colors.white,
+                  size: 22),
               const SizedBox(width: 14),
               Text(
                 label,
-                style: CupertinoTheme.of(context)
-                    .textTheme
-                    .textStyle
-                    .copyWith(color: Colors.white, fontSize: 17),
+                style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                      color: disabled
+                          ? Colors.white.withValues(alpha: 0.3)
+                          : Colors.white,
+                      fontSize: 17,
+                    ),
               ),
             ],
           ),
@@ -586,45 +616,45 @@ class _ZImageEditorState extends State<ZImageEditor> {
     );
   }
 
-  void _showAspectRatioPicker(ImageEditorState state) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: AspectRatioPreset.values.map((preset) {
-          final isSelected = state.aspectRatioPreset == preset;
-          return CupertinoActionSheetAction(
-            onPressed: () {
-              _controller.setAspectRatioPreset(preset);
-              Navigator.pop(context);
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  preset.label,
-                  style: TextStyle(
-                    color: isSelected
-                        ? CupertinoColors.systemBlue
-                        : CupertinoColors.label,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+  Widget _buildAspectRatioStrip(ImageEditorState state) {
+    return SizedBox(
+      height: 142,
+      child: Align(
+        alignment: Alignment.center,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: AspectRatioPreset.values.map((preset) {
+              final isSelected = state.aspectRatioPreset == preset;
+              return Container(
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? CupertinoColors.systemGrey2
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: GestureDetector(
+                  onTap: () {
+                    _controller.setAspectRatioPreset(preset);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Text(
+                      preset.label,
+                      style: TextStyle(
+                        color:
+                            isSelected ? CupertinoColors.black : Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
                   ),
                 ),
-                if (isSelected) ...[
-                  const SizedBox(width: 8),
-                  const Icon(
-                    CupertinoIcons.checkmark,
-                    size: 16,
-                    color: CupertinoColors.systemBlue,
-                  ),
-                ],
-              ],
-            ),
-          );
-        }).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -637,7 +667,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
           icon: CupertinoIcons.slider_horizontal_3,
           label: 'Adjust',
           isSelected: state.currentTab == EditorTab.adjust,
-          onTap: () => _controller.setTab(EditorTab.adjust),
+          onTap: () {
+            _controller.setTab(EditorTab.adjust);
+            setState(() => _showingAspectRatioPicker = false);
+          },
         ),
       if (widget.showCropTab)
         _buildTab(
@@ -719,6 +752,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   Widget _buildToolControls(ImageEditorState state) {
+    if (state.currentTab == EditorTab.crop && _showingAspectRatioPicker) {
+      return _buildAspectRatioStrip(state);
+    }
     final index = switch (state.currentTab) {
       EditorTab.adjust => 0,
       EditorTab.crop => 1,

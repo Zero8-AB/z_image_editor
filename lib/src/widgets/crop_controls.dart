@@ -136,6 +136,7 @@ class _CropControlsState extends State<CropControls> {
                               }),
                               onDoubleTap: _activeMode == badges[i].mode
                                   ? () {
+                                      widget.controller.beginGesture();
                                       switch (badges[i].mode) {
                                         case _TiltMode.straighten:
                                           widget.controller.setFineRotation(0);
@@ -160,6 +161,8 @@ class _CropControlsState extends State<CropControls> {
                 height: 40,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: (_) =>
+                      widget.controller.beginGesture(),
                   onHorizontalDragUpdate: (d) {
                     switch (_activeMode) {
                       case _TiltMode.straighten:

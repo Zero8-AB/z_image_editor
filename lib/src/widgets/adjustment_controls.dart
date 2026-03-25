@@ -163,12 +163,18 @@ class _AdjustmentControlsState extends State<AdjustmentControls> {
                               }),
                               onDoubleTap: _active == badges[i].param
                                   ? switch (badges[i].param) {
-                                      _AdjParam.brightness => () =>
-                                          widget.controller.setBrightness(0),
-                                      _AdjParam.contrast => () =>
-                                          widget.controller.setContrast(1.0),
-                                      _AdjParam.saturation => () =>
-                                          widget.controller.setSaturation(1.0),
+                                      _AdjParam.brightness => () {
+                                          widget.controller.beginGesture();
+                                          widget.controller.setBrightness(0);
+                                        },
+                                      _AdjParam.contrast => () {
+                                          widget.controller.beginGesture();
+                                          widget.controller.setContrast(1.0);
+                                        },
+                                      _AdjParam.saturation => () {
+                                          widget.controller.beginGesture();
+                                          widget.controller.setSaturation(1.0);
+                                        },
                                     }
                                   : null,
                             ),
@@ -184,6 +190,8 @@ class _AdjustmentControlsState extends State<AdjustmentControls> {
                 height: 40,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: (_) =>
+                      widget.controller.beginGesture(),
                   onHorizontalDragUpdate: (d) =>
                       _onDrag(d.delta.dx, widget.controller.state),
                   child: CustomPaint(
