@@ -99,6 +99,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
       SystemUiMode.manual,
       overlays: [SystemUiOverlay.bottom],
     );
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
   }
 
   @override
@@ -108,6 +112,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    // Restore all orientations when the editor is closed.
+    SystemChrome.setPreferredOrientations([]);
     _controller.dispose();
     super.dispose();
   }
