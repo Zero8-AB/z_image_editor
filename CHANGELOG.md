@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.5.1...v0.6.0) (2026-03-27)
+
+
+### Features
+
+* add portrait orientation support for aspect-ratio presets ([#39](https://github.com/Zero8-AB/z_image_editor/issues/39)) ([ada52c6](https://github.com/Zero8-AB/z_image_editor/commit/ada52c69de9f05a192bf31d3b0837b928b20c77a))
+* Feature/undo redo ([#37](https://github.com/Zero8-AB/z_image_editor/issues/37)) ([36ff926](https://github.com/Zero8-AB/z_image_editor/commit/36ff926c64e15a37e01f4e33f1f6a2f22483866d))
+
 ## [0.5.1](https://github.com/Zero8-AB/z_image_editor/compare/v0.5.0...v0.5.1) (2026-03-18)
 
 
