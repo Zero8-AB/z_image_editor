@@ -479,6 +479,14 @@ class _ZImageEditorState extends State<ZImageEditor> {
                               setState(() {
                                 _showingAspectRatioPicker =
                                     !_showingAspectRatioPicker;
+                                // Sync the portrait toggle when the picker is
+                                // opened while ratio9x16 is active in state so
+                                // the 16:9 chip appears selected + highlighted.
+                                if (_showingAspectRatioPicker &&
+                                    _controller.state.aspectRatioPreset ==
+                                        AspectRatioPreset.ratio9x16) {
+                                  _isCropPortrait = true;
+                                }
                               });
                             },
                             child: Icon(
@@ -663,7 +671,19 @@ class _ZImageEditorState extends State<ZImageEditor> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: presets.map((preset) {
-                final isSelected = state.aspectRatioPreset == preset;
+                // ratio9x16 is hidden from the list but maps to ratio16x9 in
+                // portrait mode — treat ratio16x9 as selected in that case.
+                final isSelected = state.aspectRatioPreset == preset ||
+                    (preset == AspectRatioPreset.ratio16x9 &&
+                        state.aspectRatioPreset == AspectRatioPreset.ratio9x16);
+                // Show the actually-applied ratio in the label so the user is
+                // never misled. Landscape-canonical presets (ratio > 1) are
+                // inverted in portrait mode, so flip the label to match.
+                final ratio = preset.ratio;
+                final effectiveLabel =
+                    (_isCropPortrait && ratio != null && ratio > 1.0)
+                        ? preset.label.split(':').reversed.join(':')
+                        : preset.label;
                 return Container(
                   decoration: BoxDecoration(
                     color: isSelected
@@ -677,7 +697,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 8),
                       child: Text(
-                        preset.label,
+                        effectiveLabel,
                         style: TextStyle(
                           color: isSelected
                               ? CupertinoColors.black

@@ -769,9 +769,10 @@ class _CropOverlayState extends State<CropOverlay> {
   double? get _targetAspectRatio {
     final ratio = widget.aspectRatioPreset.ratio;
     if (ratio == null || ratio == 1.0) return ratio;
-    // Invert if the orientation doesn't match the natural direction of the ratio.
+    // Only invert landscape-canonical presets (ratio > 1) when portrait mode
+    // is active. Portrait-canonical presets (ratio < 1, e.g. ratio9x16) are
+    // never inverted — they already encode their own orientation.
     if (widget.portraitOrientation && ratio > 1.0) return 1.0 / ratio;
-    if (!widget.portraitOrientation && ratio < 1.0) return 1.0 / ratio;
     return ratio;
   }
 
