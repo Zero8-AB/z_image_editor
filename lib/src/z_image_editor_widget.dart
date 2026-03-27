@@ -80,6 +80,7 @@ class ZImageEditor extends StatefulWidget {
 class _ZImageEditorState extends State<ZImageEditor> {
   bool _isSaving = false;
   bool _showingAspectRatioPicker = false;
+  bool _isCropPortrait = false;
   late ImageEditorController _controller;
   OverlayEntry? _editMenuOverlay;
 
@@ -115,6 +116,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
     // Restore all orientations when the editor is closed.
     SystemChrome.setPreferredOrientations([]);
     _controller.dispose();
+    _showingAspectRatioPicker = false;
     super.dispose();
   }
 
@@ -198,6 +200,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   imageBytes: widget.imageBytes,
                   controller: _controller,
                   enableMagnifyingGlass: widget.enableMagnifyingGlass,
+                  portraitOrientation: _isCropPortrait,
                 ),
               ),
 
@@ -366,7 +369,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
           flex: 1,
           child: CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: _isSaving ? null : () => _controller.reset(),
+            onPressed: _isSaving
+                ? null
+                : () {
+                    _controller.reset();
+                    setState(() => _isCropPortrait = false);
+                  },
             child: Text(
               widget.resetLabel,
               style: const TextStyle(
@@ -435,7 +443,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
               flex: 1,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                onPressed: _isSaving ? null : () => _controller.reset(),
+                onPressed: _isSaving
+                    ? null
+                    : () {
+                        _controller.reset();
+                        setState(() => _isCropPortrait = false);
+                      },
                 child: Text(
                   widget.resetLabel,
                   style: const TextStyle(
@@ -623,43 +636,94 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   Widget _buildAspectRatioStrip(ImageEditorState state) {
+    // 9:16 is covered by portrait orientation + 16:9, so hide it from the strip.
+    final presets = AspectRatioPreset.values
+        .where((p) => p != AspectRatioPreset.ratio9x16)
+        .toList();
+
     return SizedBox(
       height: 142,
-      child: Align(
-        alignment: Alignment.center,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: AspectRatioPreset.values.map((preset) {
-              final isSelected = state.aspectRatioPreset == preset;
-              return Container(
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? CupertinoColors.systemGrey2
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: GestureDetector(
-                  onTap: () {
-                    _controller.setAspectRatioPreset(preset);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Text(
-                      preset.label,
-                      style: TextStyle(
-                        color:
-                            isSelected ? CupertinoColors.black : Colors.white70,
-                        fontSize: 14,
-                        fontWeight: FontWeight.normal,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // ── Portrait / Landscape orientation toggle ──────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildOrientationToggle(portrait: true),
+              const SizedBox(width: 6),
+              _buildOrientationToggle(portrait: false),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // ── Aspect ratio preset chips ─────────────────────────────────────
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: presets.map((preset) {
+                final isSelected = state.aspectRatioPreset == preset;
+                return Container(
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? CupertinoColors.systemGrey2
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: GestureDetector(
+                    onTap: () => _controller.setAspectRatioPreset(preset),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      child: Text(
+                        preset.label,
+                        style: TextStyle(
+                          color: isSelected
+                              ? CupertinoColors.black
+                              : Colors.white70,
+                          fontSize: 14,
+                          fontWeight: FontWeight.normal,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A single portrait-or-landscape toggle button showing a phone-shape icon.
+  Widget _buildOrientationToggle({required bool portrait}) {
+    final isSelected = _isCropPortrait == portrait;
+    final iconColor =
+        isSelected ? CupertinoColors.black : CupertinoColors.white;
+    // Phone dimensions: portrait = narrow & tall, landscape = wide & short.
+    final double iconW = portrait ? 10.0 : 18.0;
+    final double iconH = portrait ? 18.0 : 10.0;
+
+    return GestureDetector(
+      onTap: () {
+        if (_isCropPortrait != portrait) {
+          setState(() => _isCropPortrait = portrait);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? CupertinoColors.systemGrey2 : Colors.transparent,
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Container(
+          width: iconW,
+          height: iconH,
+          decoration: BoxDecoration(
+            border: Border.all(color: iconColor, width: 1.5),
+            borderRadius: BorderRadius.circular(2.5),
           ),
         ),
       ),
