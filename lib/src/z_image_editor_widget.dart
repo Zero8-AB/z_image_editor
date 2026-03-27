@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:z_image_editor/src/controller/image_editor_controller.dart';
 import 'package:z_image_editor/src/models/adjust_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_tab_settings.dart';
@@ -79,7 +79,9 @@ class ZImageEditor extends StatefulWidget {
 
 class _ZImageEditorState extends State<ZImageEditor> {
   bool _isSaving = false;
+  bool _showingAspectRatioPicker = false;
   late ImageEditorController _controller;
+  OverlayEntry? _editMenuOverlay;
 
   @override
   void initState() {
@@ -93,10 +95,25 @@ class _ZImageEditorState extends State<ZImageEditor> {
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: [SystemUiOverlay.bottom],
+    );
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
   }
 
   @override
   void dispose() {
+    _editMenuOverlay?.remove();
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    // Restore all orientations when the editor is closed.
+    SystemChrome.setPreferredOrientations([]);
     _controller.dispose();
     super.dispose();
   }
@@ -208,43 +225,55 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   Widget _buildHeader(BuildContext context, ImageEditorState state) {
+    final topPadding = MediaQuery.of(context).padding.top;
+    final isAndroid = Platform.isAndroid;
     return Container(
       color: const Color(0xFF1C1C1E),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 44,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // On Android, add a status-bar-height spacer above the buttons so
+          // they sit below the status bar. On iOS, the buttons are positioned
+          // inside the notch safe-area height (topPadding), which is already
+          // tall enough to contain the small CupertinoButtons.
+          if (isAndroid) SizedBox(height: topPadding),
+          Container(
+            padding: isAndroid
+                ? const EdgeInsets.symmetric(horizontal: 40, vertical: 20)
+                : const EdgeInsets.symmetric(horizontal: 40),
+            height: isAndroid ? null : topPadding,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                SizedBox(
+                  width: 80,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 0),
+                    foregroundColor: CupertinoColors.black,
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(50),
+                    sizeStyle: CupertinoButtonSize.small,
                     onPressed: _isSaving ? null : widget.onCancel,
                     child: Text(
                       widget.cancelLabel,
                       style: const TextStyle(
-                        color: CupertinoColors.systemBlue,
-                        fontSize: 17,
+                        color: CupertinoColors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    onPressed: _isSaving ? null : () => _controller.reset(),
-                    child: Text(
-                      widget.resetLabel,
-                      style: const TextStyle(
-                        color: CupertinoColors.systemBlue,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                SizedBox(
+                  width: 80,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 0),
                     onPressed: _isSaving ? null : _handleSave,
+                    foregroundColor: CupertinoColors.black,
+                    color: CupertinoColors.systemYellow,
+                    borderRadius: BorderRadius.circular(50),
+                    sizeStyle: CupertinoButtonSize.small,
                     child: _isSaving
                         ? const SizedBox(
                             width: 20,
@@ -254,29 +283,101 @@ class _ZImageEditorState extends State<ZImageEditor> {
                         : Text(
                             widget.doneLabel,
                             style: const TextStyle(
-                              color: CupertinoColors.systemBlue,
-                              fontSize: 17,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          // Always keep the crop toolbar in the layout so the canvas height
+          // stays constant across tabs (changing it would shift the image
+          // position under BoxFit.contain).
+          Visibility(
+            visible:
+                widget.showCropToolbar && state.currentTab == EditorTab.adjust,
+            maintainSize: false,
+            maintainAnimation: true,
+            maintainState: true,
+            child: _buildUndoToolbar(state),
+          ),
+          Visibility(
+            visible:
+                widget.showCropToolbar && state.currentTab == EditorTab.crop,
+            maintainSize: false,
+            maintainAnimation: true,
+            maintainState: true,
+            child: _buildCropToolbar(state),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUndoToolbar(ImageEditorState state) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 1,
+          child: Row(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(bottom: 8, left: 16, top: 6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF2C2C2E),
+                  borderRadius: BorderRadius.all(Radius.circular(50)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                height: 38,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap:
+                          _controller.canUndo ? () => _controller.undo() : null,
+                      child: Icon(
+                        CupertinoIcons.arrow_uturn_left,
+                        color: _controller.canUndo
+                            ? CupertinoColors.white
+                            : CupertinoColors.white.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    const SizedBox(width: 22),
+                    InkWell(
+                      onTap:
+                          _controller.canRedo ? () => _controller.redo() : null,
+                      child: Icon(
+                        CupertinoIcons.arrow_uturn_right,
+                        color: _controller.canRedo
+                            ? CupertinoColors.white
+                            : CupertinoColors.white.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          flex: 1,
+          child: CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            onPressed: _isSaving ? null : () => _controller.reset(),
+            child: Text(
+              widget.resetLabel,
+              style: const TextStyle(
+                color: CupertinoColors.systemYellow,
+                fontSize: 17,
               ),
             ),
-            // Always keep the crop toolbar in the layout so the canvas height
-            // stays constant across tabs (changing it would shift the image
-            // position under BoxFit.contain).
-            Visibility(
-              visible:
-                  widget.showCropToolbar && state.currentTab == EditorTab.crop,
-              maintainSize: true,
-              maintainAnimation: true,
-              maintainState: true,
-              child: _buildCropToolbar(state),
-            ),
-          ],
+          ),
         ),
-      ),
+        const Spacer(flex: 1),
+      ],
     );
   }
 
@@ -288,77 +389,112 @@ class _ZImageEditorState extends State<ZImageEditor> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: [
-            if (s.showRotate) ...[
-              _buildToolIcon(
-                icon: CupertinoIcons.rotate_left,
-                onTap: _controller.rotate90,
-              ),
-              const SizedBox(width: 4),
-            ],
-            if (s.showFlipHorizontal) ...[
-              _buildToolIcon(
-                icon: CupertinoIcons.arrow_left_right,
-                isActive: state.flipHorizontal,
-                onTap: _controller.flipHorizontal,
-              ),
-              const SizedBox(width: 4),
-            ],
-            if (s.showFlipVertical)
-              _buildToolIcon(
-                icon: CupertinoIcons.arrow_up_down,
-                isActive: state.flipVertical,
-                onTap: _controller.flipVertical,
-              ),
-            if (s.showAspectRatio) ...[
-              const Spacer(),
-              GestureDetector(
-                onTap: () => _showAspectRatioPicker(state),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: state.aspectRatioPreset != AspectRatioPreset.free
-                        ? CupertinoColors.systemBlue.withValues(alpha: 0.2)
-                        : const Color(0xFF3A3A3C),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: state.aspectRatioPreset != AspectRatioPreset.free
-                          ? CupertinoColors.systemBlue
-                          : Colors.transparent,
+            Expanded(
+              flex: 1,
+              child: Row(
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF2C2C2E),
+                      borderRadius: BorderRadius.all(Radius.circular(50)),
+                    ),
+                    height: 38,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(width: 12),
+                          InkWell(
+                            onTap: () => _controller.flipHorizontal(),
+                            child: const Icon(
+                              CupertinoIcons.arrow_left_right,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 22),
+                          InkWell(
+                            onTap: () => _controller.rotate90(),
+                            child: const Icon(
+                              CupertinoIcons.rotate_left,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                      ),
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        CupertinoIcons.crop,
-                        size: 16,
-                        color: state.aspectRatioPreset != AspectRatioPreset.free
-                            ? CupertinoColors.systemBlue
-                            : Colors.white70,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        state.aspectRatioPreset.label,
-                        style: TextStyle(
-                          color:
-                              state.aspectRatioPreset != AspectRatioPreset.free
-                                  ? CupertinoColors.systemBlue
-                                  : Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 3),
-                      Icon(
-                        CupertinoIcons.chevron_down,
-                        size: 11,
-                        color: state.aspectRatioPreset != AspectRatioPreset.free
-                            ? CupertinoColors.systemBlue
-                            : Colors.white38,
-                      ),
-                    ],
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                onPressed: _isSaving ? null : () => _controller.reset(),
+                child: Text(
+                  widget.resetLabel,
+                  style: const TextStyle(
+                    color: CupertinoColors.systemYellow,
+                    fontSize: 17,
                   ),
+                ),
+              ),
+            ),
+            if (s.showAspectRatio) ...[
+              Expanded(
+                flex: 1,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF2C2C2E),
+                        borderRadius: BorderRadius.all(Radius.circular(50)),
+                      ),
+                      height: 38,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(width: 12),
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _showingAspectRatioPicker =
+                                    !_showingAspectRatioPicker;
+                              });
+                            },
+                            child: Icon(
+                              CupertinoIcons.crop,
+                              size: 22,
+                              color: _showingAspectRatioPicker
+                                  ? CupertinoColors.systemYellow
+                                  : state.aspectRatioPreset !=
+                                          AspectRatioPreset.free
+                                      ? CupertinoColors.systemBlue
+                                      : Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 22),
+                          Builder(
+                            builder: (btnCtx) => InkWell(
+                              onTap: () => _showEditMenu(btnCtx),
+                              child: const Icon(
+                                CupertinoIcons.ellipsis,
+                                size: 22,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -368,65 +504,163 @@ class _ZImageEditorState extends State<ZImageEditor> {
     );
   }
 
-  Widget _buildToolIcon({
-    required IconData icon,
-    required VoidCallback onTap,
-    bool isActive = false,
-  }) {
-    return GestureDetector(
+  void _dismissEditMenu() {
+    _editMenuOverlay?.remove();
+    _editMenuOverlay = null;
+  }
+
+  void _showEditMenu(BuildContext btnCtx) {
+    _dismissEditMenu();
+    final box = btnCtx.findRenderObject()! as RenderBox;
+    final overlayState = Overlay.of(context);
+    final overlayBox = overlayState.context.findRenderObject()! as RenderBox;
+    final pos = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+
+    const menuWidth = 220.0;
+
+    // Align menu top-right to button top-right, opening downward.
+    final left = (pos.dx + 12) + box.size.width - menuWidth;
+    final top = pos.dy - 8;
+
+    _editMenuOverlay = OverlayEntry(
+      builder: (_) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _dismissEditMenu,
+            ),
+          ),
+          Positioned(
+            left: left,
+            top: top,
+            width: menuWidth,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C2C2E),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildEditMenuItem(
+                      CupertinoIcons.arrow_uturn_left,
+                      'Undo',
+                      _controller.canUndo
+                          ? () {
+                              _dismissEditMenu();
+                              _controller.undo();
+                            }
+                          : null,
+                    ),
+                    const Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: Colors.white24,
+                      indent: 22,
+                      endIndent: 22,
+                    ),
+                    _buildEditMenuItem(
+                      CupertinoIcons.arrow_uturn_right,
+                      'Redo',
+                      _controller.canRedo
+                          ? () {
+                              _dismissEditMenu();
+                              _controller.redo();
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    overlayState.insert(_editMenuOverlay!);
+  }
+
+  Widget _buildEditMenuItem(IconData icon, String label, VoidCallback? onTap) {
+    final disabled = onTap == null;
+    return InkWell(
       onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color:
-              isActive ? CupertinoColors.systemBlue : const Color(0xFF3A3A3C),
-          borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Row(
+            children: [
+              Icon(icon,
+                  color: disabled
+                      ? Colors.white.withValues(alpha: 0.3)
+                      : Colors.white,
+                  size: 22),
+              const SizedBox(width: 14),
+              Text(
+                label,
+                style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                      color: disabled
+                          ? Colors.white.withValues(alpha: 0.3)
+                          : Colors.white,
+                      fontSize: 17,
+                    ),
+              ),
+            ],
+          ),
         ),
-        child: Icon(icon, color: Colors.white, size: 18),
       ),
     );
   }
 
-  void _showAspectRatioPicker(ImageEditorState state) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        actions: AspectRatioPreset.values.map((preset) {
-          final isSelected = state.aspectRatioPreset == preset;
-          return CupertinoActionSheetAction(
-            onPressed: () {
-              _controller.setAspectRatioPreset(preset);
-              Navigator.pop(context);
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  preset.label,
-                  style: TextStyle(
-                    color: isSelected
-                        ? CupertinoColors.systemBlue
-                        : CupertinoColors.label,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+  Widget _buildAspectRatioStrip(ImageEditorState state) {
+    return SizedBox(
+      height: 142,
+      child: Align(
+        alignment: Alignment.center,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: AspectRatioPreset.values.map((preset) {
+              final isSelected = state.aspectRatioPreset == preset;
+              return Container(
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? CupertinoColors.systemGrey2
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: GestureDetector(
+                  onTap: () {
+                    _controller.setAspectRatioPreset(preset);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Text(
+                      preset.label,
+                      style: TextStyle(
+                        color:
+                            isSelected ? CupertinoColors.black : Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
                   ),
                 ),
-                if (isSelected) ...[
-                  const SizedBox(width: 8),
-                  const Icon(
-                    CupertinoIcons.checkmark,
-                    size: 16,
-                    color: CupertinoColors.systemBlue,
-                  ),
-                ],
-              ],
-            ),
-          );
-        }).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -434,19 +668,22 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
   Widget _buildTabSelector(ImageEditorState state) {
     final tabs = [
+      if (widget.showAdjustTab)
+        _buildTab(
+          icon: CupertinoIcons.slider_horizontal_3,
+          label: 'Adjust',
+          isSelected: state.currentTab == EditorTab.adjust,
+          onTap: () {
+            _controller.setTab(EditorTab.adjust);
+            setState(() => _showingAspectRatioPicker = false);
+          },
+        ),
       if (widget.showCropTab)
         _buildTab(
           icon: CupertinoIcons.crop,
           label: 'Crop',
           isSelected: state.currentTab == EditorTab.crop,
           onTap: () => _controller.setTab(EditorTab.crop),
-        ),
-      if (widget.showAdjustTab)
-        _buildTab(
-          icon: CupertinoIcons.slider_horizontal_3,
-          label: 'Adjust',
-          isSelected: state.currentTab == EditorTab.adjust,
-          onTap: () => _controller.setTab(EditorTab.adjust),
         ),
     ];
 
@@ -521,22 +758,25 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   Widget _buildToolControls(ImageEditorState state) {
+    if (state.currentTab == EditorTab.crop && _showingAspectRatioPicker) {
+      return _buildAspectRatioStrip(state);
+    }
     final index = switch (state.currentTab) {
-      EditorTab.crop => 0,
-      EditorTab.adjust => 1,
+      EditorTab.adjust => 0,
+      EditorTab.crop => 1,
     };
     // IndexedStack keeps all panels in the layout tree simultaneously, so the
     // canvas always receives the same height regardless of which tab is active.
     return IndexedStack(
       index: index,
       children: [
-        CropControls(
-          controller: _controller,
-          settings: widget.cropTabSettings,
-        ),
         AdjustmentControls(
           controller: _controller,
           settings: widget.adjustTabSettings,
+        ),
+        CropControls(
+          controller: _controller,
+          settings: widget.cropTabSettings,
         ),
       ],
     );

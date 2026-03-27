@@ -7,6 +7,62 @@ import 'package:z_image_editor/image_editor.dart';
 class ImageEditorController extends ChangeNotifier {
   ImageEditorState _state = const ImageEditorState();
 
+  // ── Undo / Redo history ───────────────────────────────────────────────────
+
+  static const int _maxHistorySize = 50;
+
+  final List<ImageEditorState> _undoStack = [];
+  final List<ImageEditorState> _redoStack = [];
+
+  /// Whether there is a previous state to undo to.
+  bool get canUndo => _undoStack.isNotEmpty;
+
+  /// Whether there is a future state to redo to.
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  /// Push the current state onto the undo stack and clear the redo stack.
+  /// Called internally before every discrete mutation and by [beginGesture]
+  /// for continuous gestures.
+  void _pushHistory() {
+    _undoStack.add(_state);
+    if (_undoStack.length > _maxHistorySize) {
+      _undoStack.removeAt(0);
+    }
+    _redoStack.clear();
+  }
+
+  /// Record the current state as the start of a continuous gesture (ruler drag,
+  /// pan/zoom, crop-handle drag) so the entire gesture becomes a single undo
+  /// step.  Call once at gesture-start, before any mutation methods.
+  void beginGesture() => _pushHistory();
+
+  /// Undo the last discrete action or gesture.
+  void undo() {
+    if (_undoStack.isEmpty) return;
+    _redoStack.add(_state);
+    // Preserve UI-only fields so undo never switches tabs or changes layout.
+    final restored = _undoStack.removeLast();
+    _updateState(restored.copyWith(
+      currentTab: _state.currentTab,
+      displaySize: _state.displaySize,
+      imageSize: _state.imageSize,
+    ));
+  }
+
+  /// Redo the last undone action.
+  void redo() {
+    if (_redoStack.isEmpty) return;
+    _undoStack.add(_state);
+    final restored = _redoStack.removeLast();
+    _updateState(restored.copyWith(
+      currentTab: _state.currentTab,
+      displaySize: _state.displaySize,
+      imageSize: _state.imageSize,
+    ));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   /// Animation controller for smooth transitions (set by the widget)
   AnimationController? _animationController;
   Animation<double>? _scaleAnimation;
@@ -115,6 +171,7 @@ class ImageEditorController extends ChangeNotifier {
 
   // Rotation controls
   void rotate90() {
+    _pushHistory();
     final newRotation = (_state.rotation + 90) % 360;
     _updateState(_state.copyWith(rotation: newRotation, fineRotation: 0.0));
     _adjustScaleAndPanForRotation(animate: true);
@@ -296,10 +353,12 @@ class ImageEditorController extends ChangeNotifier {
   }
 
   void flipHorizontal() {
+    _pushHistory();
     _updateState(_state.copyWith(flipHorizontal: !_state.flipHorizontal));
   }
 
   void flipVertical() {
+    _pushHistory();
     _updateState(_state.copyWith(flipVertical: !_state.flipVertical));
   }
 
@@ -367,6 +426,7 @@ class ImageEditorController extends ChangeNotifier {
   }
 
   void resetCrop() {
+    _pushHistory();
     // Reset to the full safe image area (accounts for rotation scaling).
     final bounds = _fittedImageBounds();
     if (bounds != null) {
@@ -379,6 +439,7 @@ class ImageEditorController extends ChangeNotifier {
 
   // Aspect ratio preset
   void setAspectRatioPreset(AspectRatioPreset preset) {
+    _pushHistory();
     _updateState(_state.copyWith(aspectRatioPreset: preset));
     transformationService.clearCache();
   }
@@ -457,6 +518,8 @@ class ImageEditorController extends ChangeNotifier {
 
   // Reset all adjustments
   void reset() {
+    _undoStack.clear();
+    _redoStack.clear();
     _updateState(ImageEditorState(
       imageFile: _state.imageFile,
       imageBytes: _state.imageBytes,
