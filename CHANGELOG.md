@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/Zero8-AB/z_image_editor/compare/v0.6.0...v0.6.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* update button text color for better visibility in iOS-style editor ([#40](https://github.com/Zero8-AB/z_image_editor/issues/40)) ([a5991da](https://github.com/Zero8-AB/z_image_editor/commit/a5991da1396a63913d566578be4d3edbdc5577e8))
+
 ## [0.6.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.5.1...v0.6.0) (2026-03-27)
 
 
