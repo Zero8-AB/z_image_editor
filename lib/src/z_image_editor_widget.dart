@@ -253,7 +253,6 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   width: 80,
                   child: CupertinoButton(
                     padding: const EdgeInsets.symmetric(vertical: 0),
-                    foregroundColor: CupertinoColors.black,
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(50),
                     sizeStyle: CupertinoButtonSize.small,
@@ -273,7 +272,6 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   child: CupertinoButton(
                     padding: const EdgeInsets.symmetric(vertical: 0),
                     onPressed: _isSaving ? null : _handleSave,
-                    foregroundColor: CupertinoColors.black,
                     color: CupertinoColors.systemYellow,
                     borderRadius: BorderRadius.circular(50),
                     sizeStyle: CupertinoButtonSize.small,
@@ -286,6 +284,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
                         : Text(
                             widget.doneLabel,
                             style: const TextStyle(
+                              color: CupertinoColors.black,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
