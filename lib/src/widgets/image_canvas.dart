@@ -1040,8 +1040,8 @@ class _CropOverlayState extends State<CropOverlay> {
             var newRect = _dragStartRect!;
 
             if (_targetAspectRatio != null) {
-              newRect = _handleAspectRatioConstrainedDrag(
-                  newRect, dx, dy, alignment, constraints);
+              newRect =
+                  _handleAspectRatioConstrainedDrag(newRect, dx, dy, alignment);
             } else {
               newRect = _handleFreeFormDrag(newRect, dx, dy, alignment);
             }
@@ -1159,7 +1159,6 @@ class _CropOverlayState extends State<CropOverlay> {
     double dx,
     double dy,
     Alignment alignment,
-    BoxConstraints constraints,
   ) {
     final aspectRatio = _targetAspectRatio!; // pixelWidth / pixelHeight
     final vpW = widget.viewportSize.width;
