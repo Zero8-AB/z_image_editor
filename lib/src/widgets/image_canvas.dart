@@ -15,12 +15,16 @@ class ImageCanvas extends StatefulWidget {
   /// Whether to show a magnifying glass when dragging crop handles.
   final bool enableMagnifyingGlass;
 
+  /// Whether the aspect-ratio presets should be applied in portrait orientation.
+  final bool portraitOrientation;
+
   const ImageCanvas({
     super.key,
     this.imageFile,
     this.imageBytes,
     required this.controller,
     this.enableMagnifyingGlass = false,
+    this.portraitOrientation = false,
   });
 
   @override
@@ -508,6 +512,7 @@ class _ImageCanvasState extends State<ImageCanvas>
                           tiltHorizontal: state.tiltHorizontal,
                           tiltVertical: state.tiltVertical,
                           aspectRatioPreset: state.aspectRatioPreset,
+                          portraitOrientation: widget.portraitOrientation,
                           onCropChanged: widget.controller.setCropRect,
                           onCropDragEnd: _scheduleSnap,
                           onCropDragStart: () =>
@@ -629,6 +634,12 @@ class CropOverlay extends StatefulWidget {
   final double tiltVertical;
 
   final AspectRatioPreset aspectRatioPreset;
+
+  /// Whether the aspect-ratio presets should be applied in portrait orientation.
+  /// When true, a ratio > 1 (e.g. 4:3) is inverted to its portrait counterpart
+  /// (3:4). Free and square presets are unaffected.
+  final bool portraitOrientation;
+
   final Function(CropRect) onCropChanged;
 
   /// Called when the user lifts their finger after dragging any crop handle
@@ -673,6 +684,7 @@ class CropOverlay extends StatefulWidget {
     this.tiltHorizontal = 0.0,
     this.tiltVertical = 0.0,
     this.aspectRatioPreset = AspectRatioPreset.free,
+    this.portraitOrientation = false,
     required this.onCropChanged,
     this.onCropDragEnd,
     this.onCropDragStart,
@@ -754,7 +766,15 @@ class _CropOverlayState extends State<CropOverlay> {
   }
 
   /// Get the target aspect ratio (null = free form)
-  double? get _targetAspectRatio => widget.aspectRatioPreset.ratio;
+  double? get _targetAspectRatio {
+    final ratio = widget.aspectRatioPreset.ratio;
+    if (ratio == null || ratio == 1.0) return ratio;
+    // Only invert landscape-canonical presets (ratio > 1) when portrait mode
+    // is active. Portrait-canonical presets (ratio < 1, e.g. ratio9x16) are
+    // never inverted — they already encode their own orientation.
+    if (widget.portraitOrientation && ratio > 1.0) return 1.0 / ratio;
+    return ratio;
+  }
 
   // ── Raycasting constraint helper ──────────────────────────────────────────
 
@@ -856,44 +876,52 @@ class _CropOverlayState extends State<CropOverlay> {
     }
 
     // Aspect ratio preset changed.
-    if (widget.aspectRatioPreset != oldWidget.aspectRatioPreset &&
+    if ((widget.aspectRatioPreset != oldWidget.aspectRatioPreset ||
+            widget.portraitOrientation != oldWidget.portraitOrientation) &&
         widget.aspectRatioPreset != AspectRatioPreset.free) {
       _adjustToAspectRatio();
     }
   }
 
   /// Adjust the current rect to match the target aspect ratio.
-  /// Always computes from the full image bounds so switching presets never
+  /// Always computes from the full viewport so switching presets never
   /// compounds on a previously-shrunk rect.
+  ///
+  /// The key insight: CropRect values are *normalized fractions* of the
+  /// viewport (0–1), NOT square pixel units.  A 390×500 viewport means
+  /// normW=1.0 corresponds to 390 px and normH=1.0 corresponds to 500 px,
+  /// so equality in normalized space ≠ square pixels.  We must convert
+  /// to/from pixel space to apply ratios correctly.
   void _adjustToAspectRatio() {
     if (_targetAspectRatio == null) return;
+    final targetAspect = _targetAspectRatio!; // target pixelWidth / pixelHeight
+    final vpW = widget.viewportSize.width;
+    final vpH = widget.viewportSize.height;
 
-    // Always start from the full image bounds so each preset is applied
-    // independently — selecting 1:1 then 4:3 must produce the same result
-    // as selecting 4:3 directly from the original image.
-    const rect = CropRect(left: 0, top: 0, width: 1, height: 1);
-    final targetAspect = _targetAspectRatio!;
-
-    double newWidth = rect.width;
-    double newHeight = rect.height;
-
-    // Full bounds is always 1:1 in normalized space; for portrait presets
-    // (targetAspect < 1.0) we shrink the width, for landscape/square we
-    // shrink the height.
-    if (targetAspect < 1.0) {
-      newWidth = rect.height * targetAspect;
+    // Find the largest rectangle that fits inside vpW×vpH and has
+    // the target pixel aspect ratio.
+    double pixW, pixH;
+    if (vpW / vpH > targetAspect) {
+      // Viewport is wider than the target — height is the bottleneck.
+      pixH = vpH;
+      pixW = vpH * targetAspect;
     } else {
-      newHeight = rect.width / targetAspect;
+      // Viewport is taller (or equal) — width is the bottleneck.
+      pixW = vpW;
+      pixH = vpW / targetAspect;
     }
 
-    final left = rect.left + (rect.width - newWidth) / 2;
-    final top = rect.top + (rect.height - newHeight) / 2;
+    // Convert pixel dimensions back to normalized fractions.
+    final normW = pixW / vpW;
+    final normH = pixH / vpH;
+    final normLeft = (1.0 - normW) / 2;
+    final normTop = (1.0 - normH) / 2;
 
     final proposed = CropRect(
-      left: left,
-      top: top,
-      width: newWidth,
-      height: newHeight,
+      left: normLeft,
+      top: normTop,
+      width: normW,
+      height: normH,
     );
 
     setState(() {
@@ -1012,8 +1040,8 @@ class _CropOverlayState extends State<CropOverlay> {
             var newRect = _dragStartRect!;
 
             if (_targetAspectRatio != null) {
-              newRect = _handleAspectRatioConstrainedDrag(
-                  newRect, dx, dy, alignment, constraints);
+              newRect =
+                  _handleAspectRatioConstrainedDrag(newRect, dx, dy, alignment);
             } else {
               newRect = _handleFreeFormDrag(newRect, dx, dy, alignment);
             }
@@ -1122,39 +1150,65 @@ class _CropOverlayState extends State<CropOverlay> {
   }
 
   /// Handle aspect-ratio-constrained dragging.
+  ///
+  /// [dx]/[dy] are normalized deltas (pixels / viewportDimension), so they
+  /// are NOT equal-unit.  All math is done in pixel space and converted back
+  /// to normalized at the end so the aspect ratio is applied correctly.
   CropRect _handleAspectRatioConstrainedDrag(
     CropRect rect,
     double dx,
     double dy,
     Alignment alignment,
-    BoxConstraints constraints,
   ) {
-    final aspectRatio = _targetAspectRatio!;
+    final aspectRatio = _targetAspectRatio!; // pixelWidth / pixelHeight
+    final vpW = widget.viewportSize.width;
+    final vpH = widget.viewportSize.height;
 
-    final absDx = dx.abs();
-    final absDy = dy.abs();
+    // Convert normalized deltas to pixel deltas.
+    final dxPx = dx * vpW;
+    final dyPx = dy * vpH;
+    final absDxPx = dxPx.abs();
+    final absDyPx = dyPx.abs();
 
-    double scale;
-    if (absDx > absDy) {
-      scale = dx *
-          (alignment == Alignment.topLeft || alignment == Alignment.bottomLeft
-              ? -1
-              : 1);
+    // Current size in pixels.
+    final curPixW = rect.width * vpW;
+    final curPixH = rect.height * vpH;
+
+    // Determine new pixel width based on which axis dominates the drag.
+    double newPixW;
+    if (absDxPx >= absDyPx) {
+      // Horizontal drag: width drives the resize.
+      final sign = (alignment == Alignment.topRight ||
+              alignment == Alignment.bottomRight)
+          ? 1.0
+          : -1.0;
+      newPixW = curPixW + dxPx * sign;
     } else {
-      scale = dy *
-          aspectRatio *
-          (alignment == Alignment.topLeft || alignment == Alignment.topRight
-              ? -1
-              : 1);
+      // Vertical drag: height drives; convert to an equivalent width delta.
+      final sign = (alignment == Alignment.bottomLeft ||
+              alignment == Alignment.bottomRight)
+          ? 1.0
+          : -1.0;
+      final newPixH = curPixH + dyPx * sign;
+      newPixW = newPixH * aspectRatio;
     }
 
-    double newWidth = (rect.width + scale).clamp(0.05, 1.0);
-    double newHeight = newWidth / aspectRatio;
+    double newPixH = newPixW / aspectRatio;
 
-    if (newHeight < 0.05) {
-      newHeight = 0.05;
-      newWidth = newHeight * aspectRatio;
+    // Enforce a minimum of 5 % of each viewport dimension.
+    const minNorm = 0.05;
+    if (newPixH < minNorm * vpH) {
+      newPixH = minNorm * vpH;
+      newPixW = newPixH * aspectRatio;
     }
+    if (newPixW < minNorm * vpW) {
+      newPixW = minNorm * vpW;
+      newPixH = newPixW / aspectRatio;
+    }
+
+    // Convert back to normalized fractions.
+    final newWidth = newPixW / vpW;
+    final newHeight = newPixH / vpH;
 
     double newLeft = rect.left;
     double newTop = rect.top;
