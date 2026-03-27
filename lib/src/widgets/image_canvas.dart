@@ -862,18 +862,25 @@ class _CropOverlayState extends State<CropOverlay> {
     }
   }
 
-  /// Adjust the current rect to match the target aspect ratio
+  /// Adjust the current rect to match the target aspect ratio.
+  /// Always computes from the full image bounds so switching presets never
+  /// compounds on a previously-shrunk rect.
   void _adjustToAspectRatio() {
-    if (_currentRect == null || _targetAspectRatio == null) return;
+    if (_targetAspectRatio == null) return;
 
-    final rect = _currentRect!;
-    final currentAspect = rect.width / rect.height;
+    // Always start from the full image bounds so each preset is applied
+    // independently — selecting 1:1 then 4:3 must produce the same result
+    // as selecting 4:3 directly from the original image.
+    const rect = CropRect(left: 0, top: 0, width: 1, height: 1);
     final targetAspect = _targetAspectRatio!;
 
     double newWidth = rect.width;
     double newHeight = rect.height;
 
-    if (currentAspect > targetAspect) {
+    // Full bounds is always 1:1 in normalized space; for portrait presets
+    // (targetAspect < 1.0) we shrink the width, for landscape/square we
+    // shrink the height.
+    if (targetAspect < 1.0) {
       newWidth = rect.height * targetAspect;
     } else {
       newHeight = rect.width / targetAspect;
