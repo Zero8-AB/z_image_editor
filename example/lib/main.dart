@@ -78,9 +78,9 @@ class _HomePageState extends State<HomePage> {
               resetLabel: 'Reset',
               doneLabel: 'Save',
               enableMagnifyingGlass: true,
-              imageFile: File(pickedFile.path),
-              onSave: (File edited) {
-                Navigator.of(context).pop(edited);
+              imageFiles: [File(pickedFile.path)],
+              onSaveAll: (List<File> edited) {
+                Navigator.of(context).pop(edited.first);
               },
               onCancel: () {
                 Navigator.of(context).pop();
