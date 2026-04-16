@@ -320,15 +320,6 @@ class _ZImageEditorState extends State<ZImageEditor> {
                     ),
                   ),
                 ),
-                if (_totalImages > 1)
-                  Text(
-                    '${_currentIndex + 1} / $_totalImages',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
                 SizedBox(
                   width: 80,
                   child: CupertinoButton(
@@ -358,6 +349,22 @@ class _ZImageEditorState extends State<ZImageEditor> {
               ],
             ),
           ),
+          // Progress counter shown below the button row so it is never
+          // hidden behind the iOS notch/Dynamic Island.
+          if (_totalImages > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Center(
+                child: Text(
+                  '${_currentIndex + 1} / $_totalImages',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
           // Always keep the crop toolbar in the layout so the canvas height
           // stays constant across tabs (changing it would shift the image
           // position under BoxFit.contain).
