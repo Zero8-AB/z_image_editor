@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.6.1...v0.7.0) (2026-04-16)
+
+
+### Features
+
+* batch image editing ([#63](https://github.com/Zero8-AB/z_image_editor/issues/63)) ([#65](https://github.com/Zero8-AB/z_image_editor/issues/65)) ([76f5605](https://github.com/Zero8-AB/z_image_editor/commit/76f5605c147c64b9fd18fcf34c6984fae9d11055))
+
 ## [0.6.1](https://github.com/Zero8-AB/z_image_editor/compare/v0.6.0...v0.6.1) (2026-03-27)
 
 
