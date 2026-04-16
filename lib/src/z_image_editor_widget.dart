@@ -14,9 +14,18 @@ import 'package:z_image_editor/src/widgets/image_canvas.dart';
 
 /// iOS-style image editor widget
 class ZImageEditor extends StatefulWidget {
-  final File? imageFile;
-  final Uint8List? imageBytes;
-  final Function(File editedImage) onSave;
+  /// Images to edit, provided as files. Exactly one of [imageFiles] or
+  /// [imageBytesList] must be provided.
+  final List<File>? imageFiles;
+
+  /// Images to edit, provided as raw bytes. Exactly one of [imageFiles] or
+  /// [imageBytesList] must be provided.
+  final List<Uint8List>? imageBytesList;
+
+  /// Called with the full list of edited files once every image has been saved.
+  /// A single-image session produces a one-element list.
+  final Function(List<File> editedImages) onSaveAll;
+
   final VoidCallback onCancel;
 
   /// Whether to show a magnifying glass when dragging crop handles.
@@ -29,8 +38,13 @@ class ZImageEditor extends StatefulWidget {
   /// Label for the reset button. Defaults to 'Reset'.
   final String resetLabel;
 
-  /// Label for the save/done button. Defaults to 'Done'.
+  /// Label for the save/done button on the final (or only) image.
+  /// Defaults to 'Done'.
   final String doneLabel;
+
+  /// Label for the "advance to next image" button shown on all images except
+  /// the last one when editing multiple images. Defaults to 'Next'.
+  final String nextLabel;
 
   /// Whether to show the crop toolbar (rotate, flip, aspect ratio).
   /// Defaults to `true`.
@@ -56,22 +70,25 @@ class ZImageEditor extends StatefulWidget {
 
   const ZImageEditor({
     super.key,
-    this.imageFile,
-    this.imageBytes,
-    required this.onSave,
+    this.imageFiles,
+    this.imageBytesList,
+    required this.onSaveAll,
     required this.onCancel,
     this.enableMagnifyingGlass = false,
     this.cancelLabel = 'Cancel',
     this.resetLabel = 'Reset',
     this.doneLabel = 'Done',
+    this.nextLabel = 'Next',
     this.showCropToolbar = true,
     this.cropToolbarSettings = const CropToolbarSettings(),
     this.showCropTab = true,
     this.cropTabSettings = const CropTabSettings(),
     this.showAdjustTab = true,
     this.adjustTabSettings = const AdjustTabSettings(),
-  }) : assert(imageFile != null || imageBytes != null,
-            'Either imageFile or imageBytes must be provided');
+  }) : assert(
+          imageFiles != null || imageBytesList != null,
+          'Provide imageFiles or imageBytesList.',
+        );
 
   @override
   State<ZImageEditor> createState() => _ZImageEditorState();
@@ -84,13 +101,27 @@ class _ZImageEditorState extends State<ZImageEditor> {
   late ImageEditorController _controller;
   OverlayEntry? _editMenuOverlay;
 
+  // ── Multi-image state ─────────────────────────────────────────────────────
+
+  int _currentIndex = 0;
+  final List<File> _processedImages = [];
+
+  int get _totalImages =>
+      widget.imageFiles?.length ?? widget.imageBytesList?.length ?? 1;
+
+  bool get _isLastImage => _currentIndex >= _totalImages - 1;
+
+  File? get _currentImageFile => widget.imageFiles?[_currentIndex];
+
+  Uint8List? get _currentImageBytes => widget.imageBytesList?[_currentIndex];
+
   @override
   void initState() {
     super.initState();
     _controller = ImageEditorController();
     _controller.initialize(
-      imageFile: widget.imageFile,
-      imageBytes: widget.imageBytes,
+      imageFile: _currentImageFile,
+      imageBytes: _currentImageBytes,
     );
     // Default to the first visible tab.
     if (!widget.showCropTab && widget.showAdjustTab) {
@@ -120,6 +151,24 @@ class _ZImageEditorState extends State<ZImageEditor> {
     super.dispose();
   }
 
+  /// In batch mode, save the current image, store it, and load the next one.
+  Future<void> _advanceToNextImage(File processedFile) async {
+    _processedImages.add(processedFile);
+    setState(() {
+      _currentIndex++;
+      _isCropPortrait = false;
+      _showingAspectRatioPicker = false;
+    });
+    _dismissEditMenu();
+    _controller.initialize(
+      imageFile: _currentImageFile,
+      imageBytes: _currentImageBytes,
+    );
+    if (!widget.showCropTab && widget.showAdjustTab) {
+      _controller.setTab(EditorTab.adjust);
+    }
+  }
+
   Future<void> _handleSave() async {
     if (_isSaving) return;
 
@@ -129,29 +178,33 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
     try {
       final state = _controller.state;
+      final currentFile = _currentImageFile;
+      final currentBytes = _currentImageBytes;
 
-      // If no changes were made, return original file
-      if (!state.hasChanges && widget.imageFile != null) {
-        widget.onSave(widget.imageFile!);
+      File processedFile;
+
+      if (!state.hasChanges && currentFile != null) {
+        // No edits — use the original file directly.
+        processedFile = currentFile;
+      } else if (currentFile != null) {
+        processedFile = await ImageProcessing.processImage(
+          originalFile: currentFile,
+          state: state,
+        );
+      } else if (currentBytes != null) {
+        processedFile = await ImageProcessing.processImageFromBytes(
+          bytes: currentBytes,
+          state: state,
+        );
+      } else {
         return;
       }
 
-      // Process the image with all edits (WYSIWYG when displaySize is available)
-      final File? originalFile = widget.imageFile;
-      final imageBytes = widget.imageBytes;
-
-      if (originalFile != null) {
-        final processedFile = await ImageProcessing.processImage(
-          originalFile: originalFile,
-          state: state,
-        );
-        widget.onSave(processedFile);
-      } else if (imageBytes != null) {
-        final processedFile = await ImageProcessing.processImageFromBytes(
-          bytes: imageBytes,
-          state: state,
-        );
-        widget.onSave(processedFile);
+      if (_isLastImage) {
+        _processedImages.add(processedFile);
+        widget.onSaveAll(_processedImages);
+      } else {
+        await _advanceToNextImage(processedFile);
       }
     } catch (e) {
       // Show error dialog
@@ -196,8 +249,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
               // Image canvas
               Expanded(
                 child: ImageCanvas(
-                  imageFile: widget.imageFile,
-                  imageBytes: widget.imageBytes,
+                  imageFile: _currentImageFile,
+                  imageBytes: _currentImageBytes,
                   controller: _controller,
                   enableMagnifyingGlass: widget.enableMagnifyingGlass,
                   portraitOrientation: _isCropPortrait,
@@ -282,7 +335,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
                             child: CupertinoActivityIndicator(),
                           )
                         : Text(
-                            widget.doneLabel,
+                            _totalImages > 1 && !_isLastImage
+                                ? widget.nextLabel
+                                : widget.doneLabel,
                             style: const TextStyle(
                               color: CupertinoColors.black,
                               fontSize: 14,
@@ -294,6 +349,22 @@ class _ZImageEditorState extends State<ZImageEditor> {
               ],
             ),
           ),
+          // Progress counter shown below the button row so it is never
+          // hidden behind the iOS notch/Dynamic Island.
+          if (_totalImages > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Center(
+                child: Text(
+                  '${_currentIndex + 1} / $_totalImages',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
           // Always keep the crop toolbar in the layout so the canvas height
           // stays constant across tabs (changing it would shift the image
           // position under BoxFit.contain).
