@@ -133,6 +133,8 @@ class ImageEditorController extends ChangeNotifier {
   }
 
   void initialize({File? imageFile, Uint8List? imageBytes}) {
+    _undoStack.clear();
+    _redoStack.clear();
     _updateState(ImageEditorState(
       imageFile: imageFile,
       imageBytes: imageBytes,
