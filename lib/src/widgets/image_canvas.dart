@@ -360,8 +360,7 @@ class _ImageCanvasState extends State<ImageCanvas>
             tiltVertical: state.tiltVertical,
           )
         : 1.0;
-    final newUserScale =
-        (state.scale * zoomFactor).clamp(minUserScale, 4.0);
+    final newUserScale = (state.scale * zoomFactor).clamp(minUserScale, 4.0);
 
     // Ratio of new total scale to old — used to keep the focal point fixed.
     final minScale = state.minScaleForRotation;
@@ -582,98 +581,98 @@ class _ImageCanvasState extends State<ImageCanvas>
                   if (signal is PointerScrollEvent) _onPointerScroll(signal);
                 },
                 child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                // Pan/zoom is always active — in crop mode the crop overlay
-                // handles consume touches on the handles/interior first.
-                onScaleStart: _onScaleStart,
-                onScaleUpdate: _onScaleUpdate,
-                onScaleEnd: _onScaleEnd,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Image clipped to viewport bounds.
-                    ClipRect(child: transformedImage),
+                  behavior: HitTestBehavior.opaque,
+                  // Pan/zoom is always active — in crop mode the crop overlay
+                  // handles consume touches on the handles/interior first.
+                  onScaleStart: _onScaleStart,
+                  onScaleUpdate: _onScaleUpdate,
+                  onScaleEnd: _onScaleEnd,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Image clipped to viewport bounds.
+                      ClipRect(child: transformedImage),
 
-                    // CropOverlay lives OUTSIDE ClipRect so corner/edge handles
-                    // are never clipped at the screen edges.
-                    if (state.currentTab == EditorTab.crop)
-                      Positioned.fill(
-                        child: CropOverlay(
-                          cropRect: state.cropRect,
-                          imageSize: _imageSize,
-                          viewportSize: vpSize,
-                          totalRotation: state.totalRotation,
-                          totalScale: state.minScaleForRotation * state.scale,
-                          panOffset: state.panOffset,
-                          flipHorizontal: state.flipHorizontal,
-                          flipVertical: state.flipVertical,
-                          tiltHorizontal: state.tiltHorizontal,
-                          tiltVertical: state.tiltVertical,
-                          aspectRatioPreset: state.aspectRatioPreset,
-                          portraitOrientation: widget.portraitOrientation,
-                          onCropChanged: widget.controller.setCropRect,
-                          onCropDragEnd: _scheduleSnap,
-                          onCropDragStart: () =>
-                              widget.controller.beginGesture(),
-                          onScaleStart: _onScaleStart,
-                          onScaleUpdate: _onScaleUpdate,
-                          onScaleEnd: _onScaleEnd,
-                          onHandleDragChanged: (dragging) {
-                            if (dragging) _cancelSnap();
-                            setState(() {
-                              _isDraggingCropHandle = dragging;
-                            });
-                          },
-                          displayMatrix: widget.enableMagnifyingGlass
-                              ? displayMatrix
-                              : null,
-                          loupeContentBuilder: widget.enableMagnifyingGlass
-                              ? () {
-                                  // Build a fresh widget tree for the loupe — must
-                                  // be a distinct instance from the main canvas.
-                                  Widget loupeImg;
-                                  if (widget.imageFile != null) {
-                                    loupeImg = buildFileImageWidget(
-                                      widget.imageFile!,
-                                      fit: BoxFit.contain,
-                                    );
-                                  } else {
-                                    loupeImg = Image.memory(
-                                      widget.imageBytes!,
-                                      fit: BoxFit.contain,
-                                    );
+                      // CropOverlay lives OUTSIDE ClipRect so corner/edge handles
+                      // are never clipped at the screen edges.
+                      if (state.currentTab == EditorTab.crop)
+                        Positioned.fill(
+                          child: CropOverlay(
+                            cropRect: state.cropRect,
+                            imageSize: _imageSize,
+                            viewportSize: vpSize,
+                            totalRotation: state.totalRotation,
+                            totalScale: state.minScaleForRotation * state.scale,
+                            panOffset: state.panOffset,
+                            flipHorizontal: state.flipHorizontal,
+                            flipVertical: state.flipVertical,
+                            tiltHorizontal: state.tiltHorizontal,
+                            tiltVertical: state.tiltVertical,
+                            aspectRatioPreset: state.aspectRatioPreset,
+                            portraitOrientation: widget.portraitOrientation,
+                            onCropChanged: widget.controller.setCropRect,
+                            onCropDragEnd: _scheduleSnap,
+                            onCropDragStart: () =>
+                                widget.controller.beginGesture(),
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: _onScaleUpdate,
+                            onScaleEnd: _onScaleEnd,
+                            onHandleDragChanged: (dragging) {
+                              if (dragging) _cancelSnap();
+                              setState(() {
+                                _isDraggingCropHandle = dragging;
+                              });
+                            },
+                            displayMatrix: widget.enableMagnifyingGlass
+                                ? displayMatrix
+                                : null,
+                            loupeContentBuilder: widget.enableMagnifyingGlass
+                                ? () {
+                                    // Build a fresh widget tree for the loupe — must
+                                    // be a distinct instance from the main canvas.
+                                    Widget loupeImg;
+                                    if (widget.imageFile != null) {
+                                      loupeImg = buildFileImageWidget(
+                                        widget.imageFile!,
+                                        fit: BoxFit.contain,
+                                      );
+                                    } else {
+                                      loupeImg = Image.memory(
+                                        widget.imageBytes!,
+                                        fit: BoxFit.contain,
+                                      );
+                                    }
+                                    if (state.brightness != 0 ||
+                                        state.contrast != 1.0 ||
+                                        state.saturation != 1.0) {
+                                      loupeImg = ColorFiltered(
+                                        colorFilter: ColorFilterMatrix.combined(
+                                          brightness: state.brightness,
+                                          contrast: state.contrast,
+                                          saturation: state.saturation,
+                                        ),
+                                        child: loupeImg,
+                                      );
+                                    }
+                                    return loupeImg;
                                   }
-                                  if (state.brightness != 0 ||
-                                      state.contrast != 1.0 ||
-                                      state.saturation != 1.0) {
-                                    loupeImg = ColorFiltered(
-                                      colorFilter: ColorFilterMatrix.combined(
-                                        brightness: state.brightness,
-                                        contrast: state.contrast,
-                                        saturation: state.saturation,
-                                      ),
-                                      child: loupeImg,
-                                    );
-                                  }
-                                  return loupeImg;
-                                }
-                              : null,
-                        ),
-                      ),
-
-                    // Static crop indicator on other tabs (no handles).
-                    if (state.currentTab != EditorTab.crop &&
-                        cropVpRect != null)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: CropOverlayPainter(cropRect: cropVpRect),
+                                : null,
                           ),
                         ),
-                      ),
-                  ],
+
+                      // Static crop indicator on other tabs (no handles).
+                      if (state.currentTab != EditorTab.crop &&
+                          cropVpRect != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: CropOverlayPainter(cropRect: cropVpRect),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
               );
             },
           ),
