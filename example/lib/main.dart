@@ -5,11 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:z_image_editor/image_editor.dart';
 
-// Use the same conditional File as the package so types are compatible.
-// On native this resolves to dart:io; on web to the package's File stub.
-// ignore: uri_does_not_exist
-import 'dart:io'
-    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
+// Use the package's public conditional export so File types are compatible on
+// both mobile (dart:io) and web (package stub). See platform_types.dart.
+import 'package:z_image_editor/platform_types.dart';
 
 void main() {
   runApp(const MyApp());
