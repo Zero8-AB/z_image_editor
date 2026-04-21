@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.1...v0.8.2) (2026-04-21)
+
+
+### Bug Fixes
+
+* use native PNG encoder on web to fix save freeze ([#76](https://github.com/Zero8-AB/z_image_editor/issues/76)) ([8ac1a53](https://github.com/Zero8-AB/z_image_editor/commit/8ac1a5394077772bc11fd01a9bc9996e902e804d))
+
 ## [0.8.1](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.0...v0.8.1) (2026-04-21)
 
 
