@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-/// Centered card shell shown around the editor on desktop web.
+/// Centered shell shown around the editor on desktop web.
 ///
-/// The card is sized to a comfortable fraction of the viewport rather than
-/// filling the full screen, giving a more intentional, windowed feel.
+/// Constrains the editor to a comfortable maximum width while letting it fill
+/// the full viewport height. The background on either side matches the
+/// editor's own background colour so the whole page looks cohesive.
 ///
-/// On narrow viewports (< 620 dp wide) the card fills the entire screen so
-/// the layout degrades gracefully on mobile-sized browser windows without
-/// affecting the mobile app build at all.
+/// On narrow viewports (< 620 dp wide) the shell is skipped entirely so the
+/// layout degrades gracefully on mobile-sized browser windows.
 class WebEditorShell extends StatelessWidget {
   final Widget child;
 
@@ -17,35 +17,19 @@ class WebEditorShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Narrow viewport → full-screen (no card chrome)
+        // Narrow viewport → no shell (full-screen, same as mobile build)
         if (constraints.maxWidth < 620) return child;
 
         final cardWidth = (constraints.maxWidth * 0.82).clamp(0.0, 960.0);
-        final cardHeight = (constraints.maxHeight * 0.90).clamp(0.0, 860.0);
 
-        return Container(
-          // Dimmed page background visible around the card
-          color: Colors.black.withValues(alpha: 0.82),
+        return ColoredBox(
+          // Match the editor's own background so the side gutters blend in.
+          color: const Color(0xFF1C1C1E),
           child: Center(
             child: SizedBox(
               width: cardWidth,
-              height: cardHeight,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        blurRadius: 48,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: child,
-                ),
-              ),
+              height: constraints.maxHeight,
+              child: child,
             ),
           ),
         );
