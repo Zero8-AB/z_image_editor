@@ -4,6 +4,7 @@ import 'dart:io'
 import 'package:z_image_editor/src/utils/platform_image_utils.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:z_image_editor/image_editor.dart';
 import 'package:z_image_editor/src/utils/image_processing.dart';
@@ -152,6 +153,12 @@ class _ImageCanvasState extends State<ImageCanvas>
   double _gestureStartUserScale = 1.0;
   Offset _gestureStartFocalPoint = Offset.zero;
 
+  /// True while a scale/drag gesture is in progress.
+  /// Used to suppress scroll-to-zoom so that dragging crop handles on desktop
+  /// (where trackpad motion can fire PointerScrollEvents alongside drags)
+  /// doesn't accidentally zoom the image.
+  bool _gestureActive = false;
+
   @override
   void initState() {
     super.initState();
@@ -186,6 +193,7 @@ class _ImageCanvasState extends State<ImageCanvas>
 
   void _onScaleStart(ScaleStartDetails details) {
     widget.controller.beginGesture();
+    _gestureActive = true;
     _snapTimer?.cancel(); // don't snap while user is actively interacting
     _gestureStartPan = widget.controller.state.panOffset;
     _gestureStartUserScale = widget.controller.state.scale;
@@ -267,6 +275,7 @@ class _ImageCanvasState extends State<ImageCanvas>
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
+    _gestureActive = false;
     // Final clamp to correct any floating-point drift accumulated during gesture.
     final state = widget.controller.state;
     final Offset clamped;
@@ -315,6 +324,88 @@ class _ImageCanvasState extends State<ImageCanvas>
       cr.width * vpSize.width,
       cr.height * vpSize.height,
     );
+  }
+
+  // ── Scroll-to-zoom (desktop/web) ───────────────────────────────────────────
+
+  /// Handles mouse-wheel / trackpad scroll events for desktop zoom.
+  ///
+  /// Uses the same zoom-around-focal-point formula as [_onScaleUpdate] so all
+  /// crop constraints, pan clamping, and scale limits are respected identically.
+  /// Mobile touch pinch is completely unaffected — [PointerScrollEvent] is
+  /// never fired by touch input.
+  void _onPointerScroll(PointerScrollEvent event) {
+    if (_imageSize == null) return;
+    if (_gestureActive) return; // ignore scroll during active drag/pinch
+
+    final state = widget.controller.state;
+    final vpSize = _viewportSize;
+    final vpCenter = Offset(vpSize.width / 2, vpSize.height / 2);
+
+    // Translate scroll delta to a zoom factor.
+    // scrollDelta.dy < 0 → scroll up → zoom in; > 0 → zoom out.
+    // Clamp to ±20% per event so fast trackpad flicks don't jump wildly.
+    const sensitivity = 0.001;
+    final zoomFactor =
+        (1.0 - event.scrollDelta.dy * sensitivity).clamp(0.80, 1.20);
+
+    // Minimum scale: image must continue to cover the crop box.
+    final minUserScale = state.cropRect != null
+        ? transformationService.calculateMinUserScaleForCrop(
+            cropRect: state.cropRect!,
+            imageSize: _imageSize!,
+            viewportSize: vpSize,
+            rotationDegrees: state.totalRotation,
+            tiltHorizontal: state.tiltHorizontal,
+            tiltVertical: state.tiltVertical,
+          )
+        : 1.0;
+    final newUserScale =
+        (state.scale * zoomFactor).clamp(minUserScale, 4.0);
+
+    // Ratio of new total scale to old — used to keep the focal point fixed.
+    final minScale = state.minScaleForRotation;
+    final oldTotal = (minScale * state.scale).clamp(0.0001, double.infinity);
+    final r = (minScale * newUserScale) / oldTotal;
+
+    // Keep the point under the cursor visually fixed:
+    //   newPan = (1 − r) × (cursor − vpCenter) + oldPan × r
+    final focalPoint = event.localPosition;
+    final rawPan = (focalPoint - vpCenter) * (1 - r) + state.panOffset * r;
+
+    // Clamp pan using the same path as _onScaleUpdate.
+    final Offset clampedPan;
+    if (state.currentTab == EditorTab.crop &&
+        state.cropRect != null &&
+        _imageSize != null) {
+      clampedPan = transformationService.clampPanToCoverCrop(
+        pan: rawPan,
+        cropRect: state.cropRect!,
+        imageSize: _imageSize!,
+        viewportSize: vpSize,
+        rotationDegrees: state.totalRotation,
+        totalScale: minScale * newUserScale,
+        flipHorizontal: state.flipHorizontal,
+        flipVertical: state.flipVertical,
+        tiltHorizontal: state.tiltHorizontal,
+        tiltVertical: state.tiltVertical,
+      );
+    } else {
+      clampedPan = transformationService.clampPanOffset(
+        currentOffset: rawPan,
+        imageSize: _imageSize!,
+        viewportSize: vpSize,
+        rotationDegrees: state.totalRotation,
+        userScale: newUserScale,
+        cropViewport: _cropViewport(state, vpSize),
+      );
+    }
+
+    widget.controller.setScale(newUserScale);
+    widget.controller.setPanOffsetDirect(clampedPan);
+
+    // Keep the snap timer in sync with user activity.
+    if (state.currentTab == EditorTab.crop) _scheduleSnap();
   }
 
   @override
@@ -486,7 +577,11 @@ class _ImageCanvasState extends State<ImageCanvas>
                 );
               }
 
-              return GestureDetector(
+              return Listener(
+                onPointerSignal: (signal) {
+                  if (signal is PointerScrollEvent) _onPointerScroll(signal);
+                },
+                child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 // Pan/zoom is always active — in crop mode the crop overlay
                 // handles consume touches on the handles/interior first.
@@ -578,6 +673,7 @@ class _ImageCanvasState extends State<ImageCanvas>
                       ),
                   ],
                 ),
+              ),
               );
             },
           ),
