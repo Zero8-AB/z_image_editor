@@ -104,6 +104,7 @@ class ImageEditorState {
       tiltHorizontal != 0.0 ||
       tiltVertical != 0.0 ||
       flipHorizontal ||
+      flipVertical ||
       cropRect != null ||
       scale != 1.0 ||
       panOffset != Offset.zero;

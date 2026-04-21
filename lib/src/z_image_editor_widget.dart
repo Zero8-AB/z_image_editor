@@ -136,6 +136,22 @@ class _ZImageEditorState extends State<ZImageEditor> {
   @override
   void initState() {
     super.initState();
+
+    // Runtime API validation (asserts are stripped in release builds).
+    if (kIsWeb) {
+      if (widget.onSaveAllBytes == null) {
+        throw ArgumentError('ZImageEditor: onSaveAllBytes is required on web.');
+      }
+      if (widget.imageBytesList == null) {
+        throw ArgumentError('ZImageEditor: imageFiles is not supported on web. '
+            'Use imageBytesList instead.');
+      }
+    } else {
+      if (widget.onSaveAll == null) {
+        throw ArgumentError('ZImageEditor: onSaveAll is required on mobile.');
+      }
+    }
+
     _controller = ImageEditorController();
     _controller.initialize(
       imageFile: _currentImageFile,
@@ -258,12 +274,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
     final currentBytes = _currentImageBytes;
     if (currentBytes == null) return;
 
-    final pngBytes = state.hasChanges
-        ? await ImageProcessing.processImageToBytes(
-            bytes: currentBytes,
-            state: state,
-          )
-        : currentBytes;
+    final pngBytes = await ImageProcessing.processImageToBytes(
+      bytes: currentBytes,
+      state: state,
+    );
 
     if (_isLastImage) {
       _processedImageBytes.add(pngBytes);
