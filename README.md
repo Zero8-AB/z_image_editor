@@ -147,6 +147,64 @@ For a complete integration example covering all platforms, see [`example/lib/mai
 
 Passing the wrong combination throws an `ArgumentError` at startup with a clear message.
 
+### Cross-platform builds — avoiding `dart:io File` compile errors
+
+If your app compiles for **both mobile and web**, passing a `dart:io File` to
+`imageFiles` will produce a compile error on web:
+
+```
+Error: The argument type 'File/*1*/' can't be assigned to the parameter type 'File/*2*/'.
+ - 'File/*1*/' is from 'dart:io'.
+ - 'File/*2*/' is from 'package:z_image_editor/src/utils/platform_io_web.dart'.
+```
+
+This happens because the package uses a conditional import for `File` internally
+(`dart:io` on mobile, a lightweight stub on web), so the two `File` types are
+distinct at compile time.
+
+**Option 1 — use `imageBytesList` (recommended for cross-platform code)**
+
+Read the file bytes yourself and pass them as `imageBytesList`. This API works
+on both mobile and web with no type conflict:
+
+```dart
+Future<File> _openEditor(BuildContext context, File imageFile) async {
+  final bytes = await imageFile.readAsBytes();
+  if (!context.mounted) return imageFile;
+
+  final editedFiles = await Navigator.of(context).push<List<File>>(
+    MaterialPageRoute(
+      builder: (ctx) => ZImageEditor(
+        imageBytesList: [bytes],           // ✅ no File type involved
+        onSaveAll: (f) => Navigator.of(ctx).pop(f),
+        onCancel: () => Navigator.of(ctx).pop(),
+      ),
+    ),
+  );
+  return editedFiles?.first ?? imageFile;
+}
+```
+
+**Option 2 — import `File` from the package instead of `dart:io`**
+
+The package ships `lib/platform_types.dart`, a public conditional export that
+resolves to `dart:io File` on mobile and the web stub on web. Importing it
+makes the types match on every platform:
+
+```dart
+import 'package:z_image_editor/platform_types.dart'; // ← instead of 'dart:io'
+```
+
+Everything else stays the same — `imageFiles`, `onSaveAll`, etc. still work as
+documented. Just remember that `imageFiles` must still be guarded so it is not
+*used* at runtime on web:
+
+```dart
+if (!kIsWeb) {
+  // safe to pass imageFiles here
+}
+```
+
 ## Configuration
 
 All parameters are optional beyond the platform-appropriate image input and save callback.
