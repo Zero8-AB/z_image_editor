@@ -1,7 +1,10 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:io'
+    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
+import 'package:z_image_editor/src/utils/platform_image_utils.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:z_image_editor/image_editor.dart';
 import 'package:z_image_editor/src/utils/image_processing.dart';
@@ -150,6 +153,12 @@ class _ImageCanvasState extends State<ImageCanvas>
   double _gestureStartUserScale = 1.0;
   Offset _gestureStartFocalPoint = Offset.zero;
 
+  /// True while a scale/drag gesture is in progress.
+  /// Used to suppress scroll-to-zoom so that dragging crop handles on desktop
+  /// (where trackpad motion can fire PointerScrollEvents alongside drags)
+  /// doesn't accidentally zoom the image.
+  bool _gestureActive = false;
+
   @override
   void initState() {
     super.initState();
@@ -184,6 +193,7 @@ class _ImageCanvasState extends State<ImageCanvas>
 
   void _onScaleStart(ScaleStartDetails details) {
     widget.controller.beginGesture();
+    _gestureActive = true;
     _snapTimer?.cancel(); // don't snap while user is actively interacting
     _gestureStartPan = widget.controller.state.panOffset;
     _gestureStartUserScale = widget.controller.state.scale;
@@ -265,6 +275,7 @@ class _ImageCanvasState extends State<ImageCanvas>
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
+    _gestureActive = false;
     // Final clamp to correct any floating-point drift accumulated during gesture.
     final state = widget.controller.state;
     final Offset clamped;
@@ -315,6 +326,97 @@ class _ImageCanvasState extends State<ImageCanvas>
     );
   }
 
+  // ── Scroll-to-zoom (desktop/web) ───────────────────────────────────────────
+
+  /// Handles mouse-wheel / trackpad scroll events for desktop zoom.
+  ///
+  /// Uses the same zoom-around-focal-point formula as [_onScaleUpdate] so all
+  /// crop constraints, pan clamping, and scale limits are respected identically.
+  /// Mobile touch pinch is completely unaffected — [PointerScrollEvent] is
+  /// never fired by touch input.
+  void _onPointerScroll(PointerScrollEvent event) {
+    if (_imageSize == null) return;
+    if (_gestureActive) return; // ignore scroll during active drag/pinch
+
+    final state = widget.controller.state;
+    final vpSize = _viewportSize;
+    final vpCenter = Offset(vpSize.width / 2, vpSize.height / 2);
+
+    // Translate scroll delta to a zoom factor.
+    // scrollDelta.dy < 0 → scroll up → zoom in; > 0 → zoom out.
+    // Clamp to ±20% per event so fast trackpad flicks don't jump wildly.
+    const sensitivity = 0.001;
+    final zoomFactor =
+        (1.0 - event.scrollDelta.dy * sensitivity).clamp(0.80, 1.20);
+
+    // Minimum scale: image must continue to cover the crop box.
+    final minUserScale = state.cropRect != null
+        ? transformationService.calculateMinUserScaleForCrop(
+            cropRect: state.cropRect!,
+            imageSize: _imageSize!,
+            viewportSize: vpSize,
+            rotationDegrees: state.totalRotation,
+            tiltHorizontal: state.tiltHorizontal,
+            tiltVertical: state.tiltVertical,
+          )
+        : 1.0;
+    final newUserScale = (state.scale * zoomFactor).clamp(minUserScale, 4.0);
+
+    // Ratio of new total scale to old — used to keep the focal point fixed.
+    final minScale = state.minScaleForRotation;
+    final oldTotal = (minScale * state.scale).clamp(0.0001, double.infinity);
+    final r = (minScale * newUserScale) / oldTotal;
+
+    // Keep the point under the cursor visually fixed:
+    //   newPan = (1 − r) × (cursor − vpCenter) + oldPan × r
+    final focalPoint = event.localPosition;
+    final rawPan = (focalPoint - vpCenter) * (1 - r) + state.panOffset * r;
+
+    // Clamp pan using the same path as _onScaleUpdate.
+    final Offset clampedPan;
+    if (state.currentTab == EditorTab.crop &&
+        state.cropRect != null &&
+        _imageSize != null) {
+      clampedPan = transformationService.clampPanToCoverCrop(
+        pan: rawPan,
+        cropRect: state.cropRect!,
+        imageSize: _imageSize!,
+        viewportSize: vpSize,
+        rotationDegrees: state.totalRotation,
+        totalScale: minScale * newUserScale,
+        flipHorizontal: state.flipHorizontal,
+        flipVertical: state.flipVertical,
+        tiltHorizontal: state.tiltHorizontal,
+        tiltVertical: state.tiltVertical,
+      );
+    } else {
+      clampedPan = transformationService.clampPanOffset(
+        currentOffset: rawPan,
+        imageSize: _imageSize!,
+        viewportSize: vpSize,
+        rotationDegrees: state.totalRotation,
+        userScale: newUserScale,
+        cropViewport: _cropViewport(state, vpSize),
+      );
+    }
+
+    // Skip if nothing actually changed (e.g. already at min/max scale).
+    final transformChanged =
+        newUserScale != state.scale || clampedPan != state.panOffset;
+    if (!transformChanged) {
+      if (state.currentTab == EditorTab.crop) _scheduleSnap();
+      return;
+    }
+
+    // Push one undo entry per scroll event so zoom is undoable.
+    widget.controller.beginGesture();
+    widget.controller.setScale(newUserScale);
+    widget.controller.setPanOffsetDirect(clampedPan);
+
+    // Keep the snap timer in sync with user activity.
+    if (state.currentTab == EditorTab.crop) _scheduleSnap();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -325,9 +427,10 @@ class _ImageCanvasState extends State<ImageCanvas>
         // ── Build image widget ──────────────────────────────────────────────
         Widget imageWidget;
         if (widget.imageFile != null) {
-          imageWidget = Image.file(
+          imageWidget = buildFileImageWidget(
             widget.imageFile!,
             fit: BoxFit.contain,
+            gaplessPlayback: false,
             frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
               if (frame != null) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -483,97 +586,102 @@ class _ImageCanvasState extends State<ImageCanvas>
                 );
               }
 
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                // Pan/zoom is always active — in crop mode the crop overlay
-                // handles consume touches on the handles/interior first.
-                onScaleStart: _onScaleStart,
-                onScaleUpdate: _onScaleUpdate,
-                onScaleEnd: _onScaleEnd,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Image clipped to viewport bounds.
-                    ClipRect(child: transformedImage),
+              return Listener(
+                onPointerSignal: (signal) {
+                  if (signal is PointerScrollEvent) _onPointerScroll(signal);
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  // Pan/zoom is always active — in crop mode the crop overlay
+                  // handles consume touches on the handles/interior first.
+                  onScaleStart: _onScaleStart,
+                  onScaleUpdate: _onScaleUpdate,
+                  onScaleEnd: _onScaleEnd,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Image clipped to viewport bounds.
+                      ClipRect(child: transformedImage),
 
-                    // CropOverlay lives OUTSIDE ClipRect so corner/edge handles
-                    // are never clipped at the screen edges.
-                    if (state.currentTab == EditorTab.crop)
-                      Positioned.fill(
-                        child: CropOverlay(
-                          cropRect: state.cropRect,
-                          imageSize: _imageSize,
-                          viewportSize: vpSize,
-                          totalRotation: state.totalRotation,
-                          totalScale: state.minScaleForRotation * state.scale,
-                          panOffset: state.panOffset,
-                          flipHorizontal: state.flipHorizontal,
-                          flipVertical: state.flipVertical,
-                          tiltHorizontal: state.tiltHorizontal,
-                          tiltVertical: state.tiltVertical,
-                          aspectRatioPreset: state.aspectRatioPreset,
-                          portraitOrientation: widget.portraitOrientation,
-                          onCropChanged: widget.controller.setCropRect,
-                          onCropDragEnd: _scheduleSnap,
-                          onCropDragStart: () =>
-                              widget.controller.beginGesture(),
-                          onScaleStart: _onScaleStart,
-                          onScaleUpdate: _onScaleUpdate,
-                          onScaleEnd: _onScaleEnd,
-                          onHandleDragChanged: (dragging) {
-                            if (dragging) _cancelSnap();
-                            setState(() {
-                              _isDraggingCropHandle = dragging;
-                            });
-                          },
-                          displayMatrix: widget.enableMagnifyingGlass
-                              ? displayMatrix
-                              : null,
-                          loupeContentBuilder: widget.enableMagnifyingGlass
-                              ? () {
-                                  // Build a fresh widget tree for the loupe — must
-                                  // be a distinct instance from the main canvas.
-                                  Widget loupeImg;
-                                  if (widget.imageFile != null) {
-                                    loupeImg = Image.file(
-                                      widget.imageFile!,
-                                      fit: BoxFit.contain,
-                                    );
-                                  } else {
-                                    loupeImg = Image.memory(
-                                      widget.imageBytes!,
-                                      fit: BoxFit.contain,
-                                    );
+                      // CropOverlay lives OUTSIDE ClipRect so corner/edge handles
+                      // are never clipped at the screen edges.
+                      if (state.currentTab == EditorTab.crop)
+                        Positioned.fill(
+                          child: CropOverlay(
+                            cropRect: state.cropRect,
+                            imageSize: _imageSize,
+                            viewportSize: vpSize,
+                            totalRotation: state.totalRotation,
+                            totalScale: state.minScaleForRotation * state.scale,
+                            panOffset: state.panOffset,
+                            flipHorizontal: state.flipHorizontal,
+                            flipVertical: state.flipVertical,
+                            tiltHorizontal: state.tiltHorizontal,
+                            tiltVertical: state.tiltVertical,
+                            aspectRatioPreset: state.aspectRatioPreset,
+                            portraitOrientation: widget.portraitOrientation,
+                            onCropChanged: widget.controller.setCropRect,
+                            onCropDragEnd: _scheduleSnap,
+                            onCropDragStart: () =>
+                                widget.controller.beginGesture(),
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: _onScaleUpdate,
+                            onScaleEnd: _onScaleEnd,
+                            onHandleDragChanged: (dragging) {
+                              if (dragging) _cancelSnap();
+                              setState(() {
+                                _isDraggingCropHandle = dragging;
+                              });
+                            },
+                            displayMatrix: widget.enableMagnifyingGlass
+                                ? displayMatrix
+                                : null,
+                            loupeContentBuilder: widget.enableMagnifyingGlass
+                                ? () {
+                                    // Build a fresh widget tree for the loupe — must
+                                    // be a distinct instance from the main canvas.
+                                    Widget loupeImg;
+                                    if (widget.imageFile != null) {
+                                      loupeImg = buildFileImageWidget(
+                                        widget.imageFile!,
+                                        fit: BoxFit.contain,
+                                      );
+                                    } else {
+                                      loupeImg = Image.memory(
+                                        widget.imageBytes!,
+                                        fit: BoxFit.contain,
+                                      );
+                                    }
+                                    if (state.brightness != 0 ||
+                                        state.contrast != 1.0 ||
+                                        state.saturation != 1.0) {
+                                      loupeImg = ColorFiltered(
+                                        colorFilter: ColorFilterMatrix.combined(
+                                          brightness: state.brightness,
+                                          contrast: state.contrast,
+                                          saturation: state.saturation,
+                                        ),
+                                        child: loupeImg,
+                                      );
+                                    }
+                                    return loupeImg;
                                   }
-                                  if (state.brightness != 0 ||
-                                      state.contrast != 1.0 ||
-                                      state.saturation != 1.0) {
-                                    loupeImg = ColorFiltered(
-                                      colorFilter: ColorFilterMatrix.combined(
-                                        brightness: state.brightness,
-                                        contrast: state.contrast,
-                                        saturation: state.saturation,
-                                      ),
-                                      child: loupeImg,
-                                    );
-                                  }
-                                  return loupeImg;
-                                }
-                              : null,
-                        ),
-                      ),
-
-                    // Static crop indicator on other tabs (no handles).
-                    if (state.currentTab != EditorTab.crop &&
-                        cropVpRect != null)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: CropOverlayPainter(cropRect: cropVpRect),
+                                : null,
                           ),
                         ),
-                      ),
-                  ],
+
+                      // Static crop indicator on other tabs (no handles).
+                      if (state.currentTab != EditorTab.crop &&
+                          cropVpRect != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: CropOverlayPainter(cropRect: cropVpRect),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -589,7 +697,7 @@ class _ImageCanvasState extends State<ImageCanvas>
 
     ImageProvider imageProvider;
     if (widget.imageFile != null) {
-      imageProvider = FileImage(widget.imageFile!);
+      imageProvider = buildFileImageProvider(widget.imageFile!);
     } else if (widget.imageBytes != null) {
       imageProvider = MemoryImage(widget.imageBytes!);
     } else {

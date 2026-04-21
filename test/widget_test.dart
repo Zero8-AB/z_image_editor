@@ -21,8 +21,11 @@ void main() {
     const stateWithContrast = ImageEditorState(contrast: 1.5);
     expect(stateWithContrast.hasChanges, true);
 
-    const stateWithFlip = ImageEditorState(flipHorizontal: true);
-    expect(stateWithFlip.hasChanges, true);
+    const stateWithFlipH = ImageEditorState(flipHorizontal: true);
+    expect(stateWithFlipH.hasChanges, true);
+
+    const stateWithFlipV = ImageEditorState(flipVertical: true);
+    expect(stateWithFlipV.hasChanges, true);
   });
 
   test('ImageEditorState copyWith', () {

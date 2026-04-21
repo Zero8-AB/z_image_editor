@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io'
+    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:z_image_editor/image_editor.dart';
@@ -103,6 +104,7 @@ class ImageEditorState {
       tiltHorizontal != 0.0 ||
       tiltVertical != 0.0 ||
       flipHorizontal ||
+      flipVertical ||
       cropRect != null ||
       scale != 1.0 ||
       panOffset != Offset.zero;

@@ -1,4 +1,6 @@
-import 'dart:io';
+import 'dart:io'
+    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +13,7 @@ import 'package:z_image_editor/src/utils/image_processing.dart';
 import 'package:z_image_editor/src/widgets/adjustment_controls.dart';
 import 'package:z_image_editor/src/widgets/crop_controls.dart';
 import 'package:z_image_editor/src/widgets/image_canvas.dart';
+import 'package:z_image_editor/src/widgets/web_editor_shell.dart';
 
 /// iOS-style image editor widget
 class ZImageEditor extends StatefulWidget {
@@ -24,7 +27,13 @@ class ZImageEditor extends StatefulWidget {
 
   /// Called with the full list of edited files once every image has been saved.
   /// A single-image session produces a one-element list.
-  final Function(List<File> editedImages) onSaveAll;
+  ///
+  /// Used on mobile. On web, provide [onSaveAllBytes] instead.
+  final Function(List<File> editedImages)? onSaveAll;
+
+  /// Web equivalent of [onSaveAll]. Called with PNG bytes for each edited
+  /// image. Required on web; ignored on mobile.
+  final Function(List<Uint8List> editedBytes)? onSaveAllBytes;
 
   final VoidCallback onCancel;
 
@@ -72,7 +81,8 @@ class ZImageEditor extends StatefulWidget {
     super.key,
     this.imageFiles,
     this.imageBytesList,
-    required this.onSaveAll,
+    this.onSaveAll,
+    this.onSaveAllBytes,
     required this.onCancel,
     this.enableMagnifyingGlass = false,
     this.cancelLabel = 'Cancel',
@@ -85,9 +95,15 @@ class ZImageEditor extends StatefulWidget {
     this.cropTabSettings = const CropTabSettings(),
     this.showAdjustTab = true,
     this.adjustTabSettings = const AdjustTabSettings(),
-  }) : assert(
+  })  : assert(
           imageFiles != null || imageBytesList != null,
           'Provide imageFiles or imageBytesList.',
+        ),
+        assert(
+          kIsWeb ? onSaveAllBytes != null : onSaveAll != null,
+          kIsWeb
+              ? 'Provide onSaveAllBytes on web.'
+              : 'Provide onSaveAll on mobile.',
         );
 
   @override
@@ -105,6 +121,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
   int _currentIndex = 0;
   final List<File> _processedImages = [];
+  // Web: accumulates PNG bytes across multi-image sessions.
+  final List<Uint8List> _processedImageBytes = [];
 
   int get _totalImages =>
       widget.imageFiles?.length ?? widget.imageBytesList?.length ?? 1;
@@ -118,6 +136,28 @@ class _ZImageEditorState extends State<ZImageEditor> {
   @override
   void initState() {
     super.initState();
+
+    // Runtime API validation (asserts are stripped in release builds).
+    if (kIsWeb) {
+      if (widget.onSaveAllBytes == null) {
+        throw ArgumentError('ZImageEditor: onSaveAllBytes is required on web.');
+      }
+      if (widget.imageBytesList == null) {
+        throw ArgumentError('ZImageEditor: imageBytesList is required on web. '
+            'Use imageBytesList instead of imageFiles.');
+      }
+      if (widget.imageFiles != null) {
+        throw ArgumentError(
+          'ZImageEditor: imageFiles is not supported on web. '
+          'Use imageBytesList instead.',
+        );
+      }
+    } else {
+      if (widget.onSaveAll == null) {
+        throw ArgumentError('ZImageEditor: onSaveAll is required on mobile.');
+      }
+    }
+
     _controller = ImageEditorController();
     _controller.initialize(
       imageFile: _currentImageFile,
@@ -127,31 +167,35 @@ class _ZImageEditorState extends State<ZImageEditor> {
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: [SystemUiOverlay.bottom],
-    );
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+    if (!kIsWeb) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: [SystemUiOverlay.bottom],
+      );
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
   }
 
   @override
   void dispose() {
     _editMenuOverlay?.remove();
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: SystemUiOverlay.values,
-    );
-    // Restore all orientations when the editor is closed.
-    SystemChrome.setPreferredOrientations([]);
+    if (!kIsWeb) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+      // Restore all orientations when the editor is closed.
+      SystemChrome.setPreferredOrientations([]);
+    }
     _controller.dispose();
     _showingAspectRatioPicker = false;
     super.dispose();
   }
 
-  /// In batch mode, save the current image, store it, and load the next one.
+  /// In batch mode (mobile), save the current image, store it, and load the next.
   Future<void> _advanceToNextImage(File processedFile) async {
     _processedImages.add(processedFile);
     setState(() {
@@ -171,43 +215,15 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
   Future<void> _handleSave() async {
     if (_isSaving) return;
-
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
 
     try {
-      final state = _controller.state;
-      final currentFile = _currentImageFile;
-      final currentBytes = _currentImageBytes;
-
-      File processedFile;
-
-      if (!state.hasChanges && currentFile != null) {
-        // No edits — use the original file directly.
-        processedFile = currentFile;
-      } else if (currentFile != null) {
-        processedFile = await ImageProcessing.processImage(
-          originalFile: currentFile,
-          state: state,
-        );
-      } else if (currentBytes != null) {
-        processedFile = await ImageProcessing.processImageFromBytes(
-          bytes: currentBytes,
-          state: state,
-        );
+      if (kIsWeb) {
+        await _handleSaveWeb();
       } else {
-        return;
-      }
-
-      if (_isLastImage) {
-        _processedImages.add(processedFile);
-        widget.onSaveAll(_processedImages);
-      } else {
-        await _advanceToNextImage(processedFile);
+        await _handleSaveMobile();
       }
     } catch (e) {
-      // Show error dialog
       if (mounted) {
         showCupertinoDialog(
           context: context,
@@ -224,10 +240,65 @@ class _ZImageEditorState extends State<ZImageEditor> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _handleSaveMobile() async {
+    final state = _controller.state;
+    final currentFile = _currentImageFile;
+    final currentBytes = _currentImageBytes;
+
+    File processedFile;
+
+    if (!state.hasChanges && currentFile != null) {
+      processedFile = currentFile;
+    } else if (currentFile != null) {
+      processedFile = await ImageProcessing.processImage(
+        originalFile: currentFile,
+        state: state,
+      );
+    } else if (currentBytes != null) {
+      processedFile = await ImageProcessing.processImageFromBytes(
+        bytes: currentBytes,
+        state: state,
+      );
+    } else {
+      return;
+    }
+
+    if (_isLastImage) {
+      _processedImages.add(processedFile);
+      widget.onSaveAll!(_processedImages);
+    } else {
+      await _advanceToNextImage(processedFile);
+    }
+  }
+
+  Future<void> _handleSaveWeb() async {
+    final state = _controller.state;
+    final currentBytes = _currentImageBytes;
+    if (currentBytes == null) return;
+
+    final pngBytes = await ImageProcessing.processImageToBytes(
+      bytes: currentBytes,
+      state: state,
+    );
+
+    if (_isLastImage) {
+      _processedImageBytes.add(pngBytes);
+      widget.onSaveAllBytes!(_processedImageBytes);
+    } else {
+      _processedImageBytes.add(pngBytes);
+      setState(() {
+        _currentIndex++;
+        _isCropPortrait = false;
+        _showingAspectRatioPicker = false;
+      });
+      _dismissEditMenu();
+      _controller.initialize(imageBytes: _currentImageBytes);
+      if (!widget.showCropTab && widget.showAdjustTab) {
+        _controller.setTab(EditorTab.adjust);
       }
     }
   }
@@ -239,14 +310,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
       builder: (context, child) {
         final state = _controller.state;
 
-        return Material(
+        final editorContent = Material(
           color: Colors.black,
           child: Column(
             children: [
-              // Header
               _buildHeader(context, state),
 
-              // Image canvas
               Expanded(
                 child: ImageCanvas(
                   imageFile: _currentImageFile,
@@ -263,12 +332,20 @@ class _ZImageEditorState extends State<ZImageEditor> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Tool-specific controls
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: _buildToolControls(state),
+                    // Tool-specific controls — constrained width on web
+                    if (kIsWeb)
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 640),
+                          child: _buildToolControls(state),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: _buildToolControls(state),
+                        ),
                       ),
-                    ),
                     _buildTabSelector(context, state),
                   ],
                 ),
@@ -276,11 +353,19 @@ class _ZImageEditorState extends State<ZImageEditor> {
             ],
           ),
         );
+
+        if (kIsWeb) {
+          return WebEditorShell(child: editorContent);
+        }
+        return editorContent;
       },
     );
   }
 
   Widget _buildHeader(BuildContext context, ImageEditorState state) {
+    // Web gets a clean, flat header — no safe-area / Dynamic Island logic.
+    if (kIsWeb) return _buildWebHeader(context, state);
+
     final topPadding = MediaQuery.of(context).padding.top;
     final isAndroid = Platform.isAndroid;
     // Dynamic Island iPhones (14 Pro / 15 / 16 series) have a safe-area top
@@ -376,6 +461,96 @@ class _ZImageEditorState extends State<ZImageEditor> {
           // Always keep the crop toolbar in the layout so the canvas height
           // stays constant across tabs (changing it would shift the image
           // position under BoxFit.contain).
+          Visibility(
+            visible:
+                widget.showCropToolbar && state.currentTab == EditorTab.adjust,
+            maintainSize: false,
+            maintainAnimation: true,
+            maintainState: true,
+            child: _buildUndoToolbar(state),
+          ),
+          Visibility(
+            visible:
+                widget.showCropToolbar && state.currentTab == EditorTab.crop,
+            maintainSize: false,
+            maintainAnimation: true,
+            maintainState: true,
+            child: _buildCropToolbar(state),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Clean, flat header for desktop web — no safe-area or Dynamic Island logic.
+  Widget _buildWebHeader(BuildContext context, ImageEditorState state) {
+    return Container(
+      color: const Color(0xFF1C1C1E),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                SizedBox(
+                  width: 90,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 0),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(50),
+                    sizeStyle: CupertinoButtonSize.small,
+                    onPressed: _isSaving ? null : widget.onCancel,
+                    child: Text(
+                      widget.cancelLabel,
+                      style: const TextStyle(
+                        color: CupertinoColors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_totalImages > 1)
+                  Text(
+                    '${_currentIndex + 1} / $_totalImages',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                SizedBox(
+                  width: 90,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 0),
+                    onPressed: _isSaving ? null : _handleSave,
+                    color: CupertinoColors.systemYellow,
+                    borderRadius: BorderRadius.circular(50),
+                    sizeStyle: CupertinoButtonSize.small,
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CupertinoActivityIndicator(),
+                          )
+                        : Text(
+                            _totalImages > 1 && !_isLastImage
+                                ? widget.nextLabel
+                                : widget.doneLabel,
+                            style: const TextStyle(
+                              color: CupertinoColors.black,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           Visibility(
             visible:
                 widget.showCropToolbar && state.currentTab == EditorTab.adjust,
