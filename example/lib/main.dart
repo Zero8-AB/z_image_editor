@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,8 +9,7 @@ import 'package:z_image_editor/image_editor.dart';
 // On native this resolves to dart:io; on web to the package's File stub.
 // ignore: uri_does_not_exist
 import 'dart:io'
-    if (dart.library.html)
-        'package:z_image_editor/src/utils/platform_io_web.dart';
+    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
 
 void main() {
   runApp(const MyApp());
@@ -56,10 +57,14 @@ class _HomePageState extends State<HomePage> {
         final imageBytes = await pickedFile.readAsBytes();
         if (!mounted) return;
 
-        final resultBytes = await Navigator.of(context).push<Uint8List>(
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (context) => ZImageEditor(
+        final resultBytes = await showDialog<Uint8List>(
+          context: context,
+          barrierColor: Colors.transparent,
+          barrierDismissible: false,
+          builder: (context) => _BlurredEditorDialog(
+            verticalMargin: 40, // px of space above & below the panel
+            maxWidth: 900, // WebEditorShell takes 82% of this → ~900 px
+            child: ZImageEditor(
               showAdjustTab: true,
               showCropTab: true,
               showCropToolbar: true,
@@ -165,10 +170,12 @@ class _HomePageState extends State<HomePage> {
             await Future.wait(pickedFiles.map((f) => f.readAsBytes()));
         if (!mounted) return;
 
-        final resultBytes = await Navigator.of(context).push<List<Uint8List>>(
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (context) => ZImageEditor(
+        final resultBytes = await showDialog<List<Uint8List>>(
+          context: context,
+          barrierColor: Colors.transparent,
+          barrierDismissible: false,
+          builder: (context) => _BlurredEditorDialog(
+            child: ZImageEditor(
               showAdjustTab: true,
               showCropTab: true,
               showCropToolbar: true,
@@ -432,6 +439,55 @@ class _FullscreenImagePreview extends StatelessWidget {
         minScale: 0.5,
         maxScale: 8.0,
         child: Center(child: Image.memory(bytes, fit: BoxFit.contain)),
+      ),
+    );
+  }
+}
+
+/// Full-screen overlay that blurs the content beneath it, then centers the
+/// Blurred backdrop dialog for the web editor.
+///
+/// [verticalMargin] controls how much empty space appears above and below
+/// the editor panel (default 40 px each side).
+///
+/// Width is handled by WebEditorShell inside ZImageEditor (82 % of the
+/// available space, capped at 960 px by default). Override [maxWidth] to
+/// give WebEditorShell a narrower canvas — it will then take 82 % of that.
+///
+/// Example — fixed ~800 px wide, 60 px vertical breathing room:
+///   _BlurredEditorDialog(maxWidth: 980, verticalMargin: 60, child: editor)
+class _BlurredEditorDialog extends StatelessWidget {
+  final Widget child;
+
+  /// Space above and below the floating panel in logical pixels.
+  final double verticalMargin;
+
+  /// Maximum width given to WebEditorShell. The shell will center the editor
+  /// at 82 % of this value (up to its own 960 px cap).
+  final double maxWidth;
+
+  const _BlurredEditorDialog({
+    required this.child,
+    this.verticalMargin = 40.0,
+    this.maxWidth = double.infinity,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.45),
+        padding: EdgeInsets.symmetric(vertical: verticalMargin),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: child,
+            ),
+          ),
+        ),
       ),
     );
   }
