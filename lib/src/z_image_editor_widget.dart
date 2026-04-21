@@ -269,7 +269,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
                         child: _buildToolControls(state),
                       ),
                     ),
-                    _buildTabSelector(state),
+                    _buildTabSelector(context, state),
                   ],
                 ),
               ),
@@ -283,22 +283,30 @@ class _ZImageEditorState extends State<ZImageEditor> {
   Widget _buildHeader(BuildContext context, ImageEditorState state) {
     final topPadding = MediaQuery.of(context).padding.top;
     final isAndroid = Platform.isAndroid;
+    // Dynamic Island iPhones (14 Pro / 15 / 16 series) have a safe-area top
+    // inset of ~59 dp. The pill is narrow enough that buttons placed within
+    // that height on either side are fully visible.
+    // Notch iPhones (up to iPhone 14 / 13 / 12 …) have ~44–47 dp and the
+    // notch spans the full width, hiding buttons at that level. Treat them
+    // the same as Android: push buttons below the safe-area with a spacer.
+    final hasDynamicIsland = !isAndroid && topPadding >= 50;
+    final useAndroidLayout = isAndroid || !hasDynamicIsland;
     return Container(
       color: const Color(0xFF1C1C1E),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // On Android, add a status-bar-height spacer above the buttons so
-          // they sit below the status bar. On iOS, the buttons are positioned
-          // inside the notch safe-area height (topPadding), which is already
-          // tall enough to contain the small CupertinoButtons.
-          if (isAndroid) SizedBox(height: topPadding),
+          // On Android and notch iPhones, add a status-bar-height spacer so
+          // the buttons sit below the status bar / notch. On Dynamic Island
+          // iPhones the buttons are positioned inside the safe-area height,
+          // visible on either side of the pill.
+          if (useAndroidLayout) SizedBox(height: topPadding),
           Container(
-            padding: isAndroid
+            padding: useAndroidLayout
                 ? const EdgeInsets.symmetric(horizontal: 40, vertical: 20)
                 : const EdgeInsets.symmetric(horizontal: 40),
-            height: isAndroid ? null : topPadding,
+            height: useAndroidLayout ? null : topPadding,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -820,7 +828,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
     );
   }
 
-  Widget _buildTabSelector(ImageEditorState state) {
+  Widget _buildTabSelector(BuildContext context, ImageEditorState state) {
     final tabs = [
       if (widget.showAdjustTab)
         _buildTab(
@@ -844,8 +852,14 @@ class _ZImageEditorState extends State<ZImageEditor> {
     // Fewer than two tabs means there's nothing to switch between.
     if (tabs.length < 2) return const SizedBox(height: 22);
 
+    // Add the system bottom inset (gesture bar / navigation bar height) so
+    // the tab pill is never hidden on devices that have a bottom system bar.
+    // On devices without one, padding.bottom is 0 and the +16 keeps the
+    // existing visual spacing.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
+      padding: EdgeInsets.fromLTRB(24, 6, 24, 16 + bottomInset),
       child: Center(
         child: IntrinsicWidth(
           child: Container(
