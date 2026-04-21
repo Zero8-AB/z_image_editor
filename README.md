@@ -72,7 +72,8 @@ final editedImages = await Navigator.of(context).push<List<File>>(
 On web, pass raw bytes and receive edited bytes back via `onSaveAllBytes`. The editor renders in a centered, width-constrained panel inside a `MaterialPageRoute`.
 
 ```dart
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:z_image_editor/image_editor.dart';
 

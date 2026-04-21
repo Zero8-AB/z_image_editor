@@ -400,6 +400,16 @@ class _ImageCanvasState extends State<ImageCanvas>
       );
     }
 
+    // Skip if nothing actually changed (e.g. already at min/max scale).
+    final transformChanged =
+        newUserScale != state.scale || clampedPan != state.panOffset;
+    if (!transformChanged) {
+      if (state.currentTab == EditorTab.crop) _scheduleSnap();
+      return;
+    }
+
+    // Push one undo entry per scroll event so zoom is undoable.
+    widget.controller.beginGesture();
     widget.controller.setScale(newUserScale);
     widget.controller.setPanOffsetDirect(clampedPan);
 
