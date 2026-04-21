@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io'
+    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -51,7 +52,15 @@ class ImageProcessing {
   //   S(s) × T(-cropL,-cropT) × T_iv × T_widget
   // where s = outputW / cropW  (output pixels per viewport pixel)
   // ---------------------------------------------------------------------------
-  static Future<File> _processImageWysiwyg({
+  // WYSIWYG renderer — reproduces the exact pixel content visible in the crop
+  // window. The shared inner method [_renderWysiwygToBytes] returns raw PNG
+  // bytes. [_processImageWysiwyg] (mobile) writes them to a temp File.
+  // [processImageToBytes] (web) returns them directly.
+  // ---------------------------------------------------------------------------
+
+  /// Returns PNG bytes for the WYSIWYG-rendered crop. Pure computation; no
+  /// filesystem access. Safe to call on web.
+  static Future<Uint8List> _renderWysiwygToBytes({
     required Uint8List bytes,
     required ImageEditorState state,
   }) async {
@@ -184,11 +193,64 @@ class ImageProcessing {
       order: img.ChannelOrder.rgba,
     );
 
+    return Uint8List.fromList(img.encodePng(cpuImage));
+  }
+
+  static Future<File> _processImageWysiwyg({
+    required Uint8List bytes,
+    required ImageEditorState state,
+  }) async {
+    final pngBytes = await _renderWysiwygToBytes(bytes: bytes, state: state);
     final tempDir = Directory.systemTemp;
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final tempFile = File('${tempDir.path}/edited_$timestamp.png');
-    await tempFile.writeAsBytes(img.encodePng(cpuImage));
+    await tempFile.writeAsBytes(pngBytes);
     return tempFile;
+  }
+
+  /// Process from raw bytes and return PNG bytes.
+  ///
+  /// Used on web where [dart:io] filesystem access is unavailable.
+  /// Follows the same WYSIWYG render pipeline as [processImage] /
+  /// [processImageFromBytes] — the output is pixel-identical.
+  static Future<Uint8List> processImageToBytes({
+    required Uint8List bytes,
+    required ImageEditorState state,
+  }) async {
+    if (state.displaySize != null) {
+      return _renderWysiwygToBytes(bytes: bytes, state: state);
+    }
+    return _processImageFallbackToBytes(bytes: bytes, state: state);
+  }
+
+  /// Pixel-based fallback for [processImageToBytes] (no displaySize).
+  static Future<Uint8List> _processImageFallbackToBytes({
+    required Uint8List bytes,
+    required ImageEditorState state,
+  }) async {
+    img.Image? image = img.decodeImage(bytes);
+    if (image == null) throw Exception('Failed to decode image');
+
+    final totalRotation = state.totalRotation;
+    if (totalRotation != 0) {
+      image = _applyRotation(image, totalRotation);
+    }
+
+    if (state.cropRect != null) {
+      image = _applyCrop(image, state.cropRect!);
+    }
+
+    if (state.flipHorizontal) image = img.flipHorizontal(image);
+    if (state.flipVertical) image = img.flipVertical(image);
+
+    image = _applyColorAdjustments(
+      image,
+      brightness: state.brightness,
+      contrast: state.contrast,
+      saturation: state.saturation,
+    );
+
+    return Uint8List.fromList(img.encodePng(image));
   }
 
   // ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io'
+    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';

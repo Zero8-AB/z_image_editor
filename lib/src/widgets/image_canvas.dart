@@ -1,5 +1,7 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:io'
+    if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
+import 'package:z_image_editor/src/utils/platform_image_utils.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -325,9 +327,10 @@ class _ImageCanvasState extends State<ImageCanvas>
         // ── Build image widget ──────────────────────────────────────────────
         Widget imageWidget;
         if (widget.imageFile != null) {
-          imageWidget = Image.file(
+          imageWidget = buildFileImageWidget(
             widget.imageFile!,
             fit: BoxFit.contain,
+            gaplessPlayback: false,
             frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
               if (frame != null) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -535,7 +538,7 @@ class _ImageCanvasState extends State<ImageCanvas>
                                   // be a distinct instance from the main canvas.
                                   Widget loupeImg;
                                   if (widget.imageFile != null) {
-                                    loupeImg = Image.file(
+                                    loupeImg = buildFileImageWidget(
                                       widget.imageFile!,
                                       fit: BoxFit.contain,
                                     );
@@ -589,7 +592,7 @@ class _ImageCanvasState extends State<ImageCanvas>
 
     ImageProvider imageProvider;
     if (widget.imageFile != null) {
-      imageProvider = FileImage(widget.imageFile!);
+      imageProvider = buildFileImageProvider(widget.imageFile!);
     } else if (widget.imageBytes != null) {
       imageProvider = MemoryImage(widget.imageBytes!);
     } else {
