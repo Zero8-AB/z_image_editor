@@ -3,6 +3,7 @@ import 'dart:io'
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:z_image_editor/src/models/image_editor_state.dart';
@@ -175,11 +176,22 @@ class ImageProcessing {
     final picture = recorder.endRecording();
     final outputImage = await picture.toImage(outputW, outputH);
 
-    // Read raw RGBA pixels from the GPU texture instead of asking the driver
-    // to encode PNG directly. On iOS/Impeller the direct PNG readback can
-    // swap R and B channels (Metal is BGRA-native), producing scattered red/
-    // blue dots in the output. rawRgba gives us canonical RGBA bytes that we
-    // then encode to PNG entirely on the CPU via the `image` package.
+    // On web (CanvasKit / Skia-Wasm) the Flutter engine's built-in PNG writer
+    // is a highly-optimised C++ implementation that runs in microseconds.
+    // The iOS/Impeller R↔B channel-swap bug does not affect web, so we can
+    // use the fast path here and skip the slow pure-Dart img.encodePng route.
+    if (kIsWeb) {
+      final pngData =
+          await outputImage.toByteData(format: ui.ImageByteFormat.png);
+      outputImage.dispose();
+      if (pngData == null) throw Exception('Failed to encode image as PNG');
+      return pngData.buffer.asUint8List();
+    }
+
+    // On iOS/Impeller the direct PNG readback can swap R and B channels
+    // (Metal is BGRA-native), producing scattered red/blue dots in the output.
+    // Read raw RGBA pixels and encode via the pure-Dart `image` package to
+    // guarantee correct channel order on all native platforms.
     final rawData =
         await outputImage.toByteData(format: ui.ImageByteFormat.rawRgba);
     outputImage.dispose();
