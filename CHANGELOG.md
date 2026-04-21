@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.7.0...v0.8.0) (2026-04-21)
+
+
+### Features
+
+* Add web support ([#73](https://github.com/Zero8-AB/z_image_editor/issues/73)) ([06b01b4](https://github.com/Zero8-AB/z_image_editor/commit/06b01b49915063460a85dc8bfe2bb75360727e8f))
+
+
+### Bug Fixes
+
+* update tab selector to include context and adjust layout for safe areas on iOS and Android ([#71](https://github.com/Zero8-AB/z_image_editor/issues/71)) ([1e10fb9](https://github.com/Zero8-AB/z_image_editor/commit/1e10fb9123dbbb34e7e726a4f4b9db6b9c9c76b7))
+
 ## [0.7.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.6.1...v0.7.0) (2026-04-16)
 
 
