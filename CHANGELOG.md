@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.0...v0.8.1) (2026-04-21)
+
+
+### Bug Fixes
+
+* add platform_types.dart to resolve dart:io File type conflict on web ([#74](https://github.com/Zero8-AB/z_image_editor/issues/74)) ([e10b8cd](https://github.com/Zero8-AB/z_image_editor/commit/e10b8cd6531b7261384417238d03961b765e1b7a))
+
 ## [0.8.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.7.0...v0.8.0) (2026-04-21)
 
 
