@@ -143,8 +143,14 @@ class _ZImageEditorState extends State<ZImageEditor> {
         throw ArgumentError('ZImageEditor: onSaveAllBytes is required on web.');
       }
       if (widget.imageBytesList == null) {
-        throw ArgumentError('ZImageEditor: imageFiles is not supported on web. '
-            'Use imageBytesList instead.');
+        throw ArgumentError('ZImageEditor: imageBytesList is required on web. '
+            'Use imageBytesList instead of imageFiles.');
+      }
+      if (widget.imageFiles != null) {
+        throw ArgumentError(
+          'ZImageEditor: imageFiles is not supported on web. '
+          'Use imageBytesList instead.',
+        );
       }
     } else {
       if (widget.onSaveAll == null) {

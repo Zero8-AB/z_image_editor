@@ -69,7 +69,7 @@ final editedImages = await Navigator.of(context).push<List<File>>(
 
 ### Web — centered floating panel (default)
 
-On web, pass raw bytes and receive edited bytes back via `onSaveAllBytes`. The editor renders in a centered, width-constrained panel by default (`openWebInFullscreen: false`).
+On web, pass raw bytes and receive edited bytes back via `onSaveAllBytes`. The editor renders in a centered, width-constrained panel inside a `MaterialPageRoute`.
 
 ```dart
 import 'package:flutter/foundation.dart';
@@ -87,28 +87,14 @@ final resultBytes = await Navigator.of(context).push<Uint8List>(
         Navigator.of(context).pop(edited.first);
       },
       onCancel: () => Navigator.of(context).pop(),
-      // openWebInFullscreen: false  ← default, centered panel
     ),
   ),
 );
 ```
 
-### Web — fullscreen
-
-To fill the entire browser viewport, set `openWebInFullscreen: true`:
-
-```dart
-ZImageEditor(
-  imageBytesList: [imageBytes],
-  onSaveAllBytes: (edited) => Navigator.of(context).pop(edited.first),
-  onCancel: () => Navigator.of(context).pop(),
-  openWebInFullscreen: true,
-)
-```
-
 ### Web — blurred dialog
 
-To show the editor as a floating dialog with the app visible and blurred behind it, use `showDialog` and handle the sizing yourself. Pass `openWebInFullscreen: true` so the package doesn't apply its own shell.
+To show the editor as a floating dialog with the app visible and blurred behind it, use `showDialog` directly and size the panel yourself:
 
 ```dart
 import 'dart:ui' show ImageFilter;
