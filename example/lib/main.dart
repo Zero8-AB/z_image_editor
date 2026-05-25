@@ -63,6 +63,7 @@ class _HomePageState extends State<HomePage> {
             verticalMargin: 40, // px of space above & below the panel
             maxWidth: 900, // WebEditorShell takes 82% of this → ~900 px
             child: ZImageEditor(
+              outputFormat: ImageOutputFormat.auto,
               showAdjustTab: true,
               showCropTab: true,
               showCropToolbar: true,

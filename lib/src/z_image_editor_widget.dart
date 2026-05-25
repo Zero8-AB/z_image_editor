@@ -9,6 +9,7 @@ import 'package:z_image_editor/src/models/adjust_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_toolbar_settings.dart';
 import 'package:z_image_editor/src/models/image_editor_state.dart';
+import 'package:z_image_editor/src/models/image_output_format.dart';
 import 'package:z_image_editor/src/utils/image_processing.dart';
 import 'package:z_image_editor/src/widgets/adjustment_controls.dart';
 import 'package:z_image_editor/src/widgets/crop_controls.dart';
@@ -77,6 +78,18 @@ class ZImageEditor extends StatefulWidget {
   /// Only relevant when [showAdjustTab] is `true`.
   final AdjustTabSettings adjustTabSettings;
 
+  /// Controls how the output image is encoded when the user presses Done.
+  ///
+  /// - [ImageOutputFormat.auto] *(default)*: skip re-encoding entirely when no
+  ///   edits have been applied (fastest for unmodified images). Re-encodes as
+  ///   PNG when edits are present.
+  /// - [ImageOutputFormat.png]: always re-encode as PNG.
+  /// - [ImageOutputFormat.jpeg]: always re-encode as JPEG.
+  /// - [ImageOutputFormat.original]: preserve the original format. Skips
+  ///   re-encoding when no edits have been applied; otherwise detects the
+  ///   input format from magic bytes and re-encodes to match.
+  final ImageOutputFormat outputFormat;
+
   const ZImageEditor({
     super.key,
     this.imageFiles,
@@ -95,6 +108,7 @@ class ZImageEditor extends StatefulWidget {
     this.cropTabSettings = const CropTabSettings(),
     this.showAdjustTab = true,
     this.adjustTabSettings = const AdjustTabSettings(),
+    this.outputFormat = ImageOutputFormat.auto,
   })  : assert(
           imageFiles != null || imageBytesList != null,
           'Provide imageFiles or imageBytesList.',
@@ -248,20 +262,36 @@ class _ZImageEditorState extends State<ZImageEditor> {
     final state = _controller.state;
     final currentFile = _currentImageFile;
     final currentBytes = _currentImageBytes;
+    final outputFormat = widget.outputFormat;
 
     File processedFile;
 
-    if (!state.hasChanges && currentFile != null) {
+    // For auto/original formats, skip re-encoding entirely when the image
+    // has not been modified — return the original source directly.
+    final skipConversion = !state.hasChanges &&
+        (outputFormat == ImageOutputFormat.auto ||
+            outputFormat == ImageOutputFormat.original);
+
+    if (skipConversion && currentFile != null) {
       processedFile = currentFile;
+    } else if (skipConversion && currentBytes != null) {
+      // Write the original bytes to a temp file without re-encoding.
+      final tempDir = Directory.systemTemp;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final tempFile = File('${tempDir.path}/edited_$timestamp.tmp');
+      await tempFile.writeAsBytes(currentBytes);
+      processedFile = tempFile;
     } else if (currentFile != null) {
       processedFile = await ImageProcessing.processImage(
         originalFile: currentFile,
         state: state,
+        outputFormat: outputFormat,
       );
     } else if (currentBytes != null) {
       processedFile = await ImageProcessing.processImageFromBytes(
         bytes: currentBytes,
         state: state,
+        outputFormat: outputFormat,
       );
     } else {
       return;
@@ -279,17 +309,31 @@ class _ZImageEditorState extends State<ZImageEditor> {
     final state = _controller.state;
     final currentBytes = _currentImageBytes;
     if (currentBytes == null) return;
+    final outputFormat = widget.outputFormat;
 
-    final pngBytes = await ImageProcessing.processImageToBytes(
-      bytes: currentBytes,
-      state: state,
-    );
+    final Uint8List outputBytes;
+
+    // For auto/original formats, skip re-encoding entirely when the image
+    // has not been modified — return the original bytes directly.
+    final skipConversion = !state.hasChanges &&
+        (outputFormat == ImageOutputFormat.auto ||
+            outputFormat == ImageOutputFormat.original);
+
+    if (skipConversion) {
+      outputBytes = currentBytes;
+    } else {
+      outputBytes = await ImageProcessing.processImageToBytes(
+        bytes: currentBytes,
+        state: state,
+        outputFormat: outputFormat,
+      );
+    }
 
     if (_isLastImage) {
-      _processedImageBytes.add(pngBytes);
+      _processedImageBytes.add(outputBytes);
       widget.onSaveAllBytes!(_processedImageBytes);
     } else {
-      _processedImageBytes.add(pngBytes);
+      _processedImageBytes.add(outputBytes);
       setState(() {
         _currentIndex++;
         _isCropPortrait = false;
