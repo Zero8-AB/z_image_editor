@@ -7,7 +7,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:z_image_editor/src/models/image_editor_state.dart';
+import 'package:z_image_editor/src/models/image_output_format.dart';
 import 'package:z_image_editor/src/utils/transformation_service.dart';
+
+/// Detected format of an input image based on magic bytes.
+enum _InputFormat { jpeg, png }
 
 class ImageProcessing {
   /// Apply all edits to the image and return the processed image.
@@ -15,28 +19,54 @@ class ImageProcessing {
   /// Uses a WYSIWYG PictureRecorder approach when display size information is
   /// available, guaranteeing pixel-perfect accuracy between preview and output.
   /// Falls back to pixel-based processing otherwise.
+  ///
+  /// [outputFormat] controls the encoding of the output. Defaults to
+  /// [ImageOutputFormat.png]. When [ImageOutputFormat.original] is passed the
+  /// format is detected from the input file's magic bytes.
   static Future<File> processImage({
     required File originalFile,
     required ImageEditorState state,
+    ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
+    final bytes = await originalFile.readAsBytes();
+    final effectiveFormat = _resolveEffectiveFormat(outputFormat, bytes);
     if (state.displaySize != null) {
       return _processImageWysiwyg(
-        bytes: await originalFile.readAsBytes(),
+        bytes: bytes,
         state: state,
+        outputFormat: effectiveFormat,
       );
     }
-    return _processImageFallback(originalFile: originalFile, state: state);
+    return _processImageFallbackFromBytes(
+      bytes: bytes,
+      state: state,
+      outputFormat: effectiveFormat,
+    );
   }
 
   /// Process from raw bytes (for imageBytes: path).
+  ///
+  /// [outputFormat] controls the encoding of the output. Defaults to
+  /// [ImageOutputFormat.png]. When [ImageOutputFormat.original] is passed the
+  /// format is detected from the input bytes' magic bytes.
   static Future<File> processImageFromBytes({
     required Uint8List bytes,
     required ImageEditorState state,
+    ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
+    final effectiveFormat = _resolveEffectiveFormat(outputFormat, bytes);
     if (state.displaySize != null) {
-      return _processImageWysiwyg(bytes: bytes, state: state);
+      return _processImageWysiwyg(
+        bytes: bytes,
+        state: state,
+        outputFormat: effectiveFormat,
+      );
     }
-    return _processImageFallbackFromBytes(bytes: bytes, state: state);
+    return _processImageFallbackFromBytes(
+      bytes: bytes,
+      state: state,
+      outputFormat: effectiveFormat,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -54,16 +84,21 @@ class ImageProcessing {
   // where s = outputW / cropW  (output pixels per viewport pixel)
   // ---------------------------------------------------------------------------
   // WYSIWYG renderer — reproduces the exact pixel content visible in the crop
-  // window. The shared inner method [_renderWysiwygToBytes] returns raw PNG
-  // bytes. [_processImageWysiwyg] (mobile) writes them to a temp File.
-  // [processImageToBytes] (web) returns them directly.
+  // window. The shared inner method [_renderWysiwygToBytes] returns encoded
+  // bytes in the requested format. [_processImageWysiwyg] (mobile) writes them
+  // to a temp File. [processImageToBytes] (web) returns them directly.
   // ---------------------------------------------------------------------------
 
-  /// Returns PNG bytes for the WYSIWYG-rendered crop. Pure computation; no
+  /// Returns encoded bytes for the WYSIWYG-rendered crop. Pure computation; no
   /// filesystem access. Safe to call on web.
+  ///
+  /// [outputFormat] must be [ImageOutputFormat.png] or
+  /// [ImageOutputFormat.jpeg]; [auto] and [original] must be resolved before
+  /// calling this method.
   static Future<Uint8List> _renderWysiwygToBytes({
     required Uint8List bytes,
     required ImageEditorState state,
+    ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
@@ -176,6 +211,24 @@ class ImageProcessing {
     final picture = recorder.endRecording();
     final outputImage = await picture.toImage(outputW, outputH);
 
+    if (outputFormat == ImageOutputFormat.jpeg) {
+      // JPEG: Flutter has no native JPEG encoder via toByteData, so read raw
+      // RGBA pixels and encode via the `image` package on all platforms.
+      final rawData =
+          await outputImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+      outputImage.dispose();
+      if (rawData == null) throw Exception('Failed to read raw image pixels');
+      final cpuImage = img.Image.fromBytes(
+        width: outputW,
+        height: outputH,
+        bytes: rawData.buffer,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      );
+      return Uint8List.fromList(img.encodeJpg(cpuImage, quality: 95));
+    }
+
+    // PNG path:
     // On web (CanvasKit / Skia-Wasm) the Flutter engine's built-in PNG writer
     // is a highly-optimised C++ implementation that runs in microseconds.
     // The iOS/Impeller R↔B channel-swap bug does not affect web, so we can
@@ -211,34 +264,52 @@ class ImageProcessing {
   static Future<File> _processImageWysiwyg({
     required Uint8List bytes,
     required ImageEditorState state,
+    ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
-    final pngBytes = await _renderWysiwygToBytes(bytes: bytes, state: state);
+    final encoded =
+        await _renderWysiwygToBytes(bytes: bytes, state: state, outputFormat: outputFormat);
     final tempDir = Directory.systemTemp;
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final tempFile = File('${tempDir.path}/edited_$timestamp.png');
-    await tempFile.writeAsBytes(pngBytes);
+    final ext = outputFormat == ImageOutputFormat.jpeg ? 'jpg' : 'png';
+    final tempFile = File('${tempDir.path}/edited_$timestamp.$ext');
+    await tempFile.writeAsBytes(encoded);
     return tempFile;
   }
 
-  /// Process from raw bytes and return PNG bytes.
+  /// Process from raw bytes and return encoded bytes.
   ///
   /// Used on web where [dart:io] filesystem access is unavailable.
   /// Follows the same WYSIWYG render pipeline as [processImage] /
   /// [processImageFromBytes] — the output is pixel-identical.
+  ///
+  /// [outputFormat] controls the encoding of the output. Defaults to
+  /// [ImageOutputFormat.png]. When [ImageOutputFormat.original] is passed the
+  /// format is detected from the input bytes' magic bytes.
   static Future<Uint8List> processImageToBytes({
     required Uint8List bytes,
     required ImageEditorState state,
+    ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
+    final effectiveFormat = _resolveEffectiveFormat(outputFormat, bytes);
     if (state.displaySize != null) {
-      return _renderWysiwygToBytes(bytes: bytes, state: state);
+      return _renderWysiwygToBytes(
+        bytes: bytes,
+        state: state,
+        outputFormat: effectiveFormat,
+      );
     }
-    return _processImageFallbackToBytes(bytes: bytes, state: state);
+    return _processImageFallbackToBytes(
+      bytes: bytes,
+      state: state,
+      outputFormat: effectiveFormat,
+    );
   }
 
   /// Pixel-based fallback for [processImageToBytes] (no displaySize).
   static Future<Uint8List> _processImageFallbackToBytes({
     required Uint8List bytes,
     required ImageEditorState state,
+    ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
     img.Image? image = img.decodeImage(bytes);
     if (image == null) throw Exception('Failed to decode image');
@@ -262,6 +333,9 @@ class ImageProcessing {
       saturation: state.saturation,
     );
 
+    if (outputFormat == ImageOutputFormat.jpeg) {
+      return Uint8List.fromList(img.encodeJpg(image, quality: 95));
+    }
     return Uint8List.fromList(img.encodePng(image));
   }
 
@@ -269,19 +343,10 @@ class ImageProcessing {
   // Fallback: pixel-based processing (used only when displaySize is unavailable)
   // NOTE: This path is intentionally simple and does NOT account for zoom/pan.
   // ---------------------------------------------------------------------------
-  static Future<File> _processImageFallback({
-    required File originalFile,
-    required ImageEditorState state,
-  }) async {
-    return _processImageFallbackFromBytes(
-      bytes: await originalFile.readAsBytes(),
-      state: state,
-    );
-  }
-
   static Future<File> _processImageFallbackFromBytes({
     required Uint8List bytes,
     required ImageEditorState state,
+    ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
     img.Image? image = img.decodeImage(bytes);
     if (image == null) throw Exception('Failed to decode image');
@@ -311,8 +376,13 @@ class ImageProcessing {
 
     final tempDir = Directory.systemTemp;
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final tempFile = File('${tempDir.path}/edited_$timestamp.jpg');
-    await tempFile.writeAsBytes(img.encodeJpg(image, quality: 95));
+    if (outputFormat == ImageOutputFormat.jpeg) {
+      final tempFile = File('${tempDir.path}/edited_$timestamp.jpg');
+      await tempFile.writeAsBytes(img.encodeJpg(image, quality: 95));
+      return tempFile;
+    }
+    final tempFile = File('${tempDir.path}/edited_$timestamp.png');
+    await tempFile.writeAsBytes(img.encodePng(image));
     return tempFile;
   }
 
@@ -340,6 +410,44 @@ class ImageProcessing {
       return image;
     }
     return img.copyRotate(image, angle: degrees);
+  }
+
+  /// Detects the format of [bytes] from its magic-byte signature.
+  ///
+  /// To support additional formats in the future, add a new [_InputFormat]
+  /// value and a corresponding magic-byte check here.
+  static _InputFormat _detectInputFormat(Uint8List bytes) {
+    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
+      return _InputFormat.jpeg;
+    }
+    // WebP: "RIFF????WEBP" — bytes[0..3] == 52 49 46 46, bytes[8..11] == 57 45 42 50
+    // HEIC/HEIF: ftyp box at offset 4 — not checked here; falls through to PNG default.
+    return _InputFormat.png;
+  }
+
+  /// Resolves [requestedFormat] to either [ImageOutputFormat.png] or
+  /// [ImageOutputFormat.jpeg] by examining [bytes] when needed.
+  ///
+  /// - [auto] → [png] (callers that skip processing for no-change images
+  ///   handle [auto] before reaching this method; when processing does run,
+  ///   PNG is the safe default)
+  /// - [original] → detect from [bytes] magic bytes
+  /// - [png] / [jpeg] → returned unchanged
+  static ImageOutputFormat _resolveEffectiveFormat(
+    ImageOutputFormat requestedFormat,
+    Uint8List bytes,
+  ) {
+    switch (requestedFormat) {
+      case ImageOutputFormat.original:
+        return _detectInputFormat(bytes) == _InputFormat.jpeg
+            ? ImageOutputFormat.jpeg
+            : ImageOutputFormat.png;
+      case ImageOutputFormat.auto:
+        return ImageOutputFormat.png;
+      case ImageOutputFormat.png:
+      case ImageOutputFormat.jpeg:
+        return requestedFormat;
+    }
   }
 
   static img.Image _applyColorAdjustments(
