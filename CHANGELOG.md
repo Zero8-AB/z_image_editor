@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.2...v0.9.0) (2026-05-25)
+
+
+### Features
+
+* skip re-encoding unmodified images and add output format control ([#112](https://github.com/Zero8-AB/z_image_editor/issues/112)) ([55bc024](https://github.com/Zero8-AB/z_image_editor/commit/55bc0246c5e55b4de1c4cb5ffff2702f54bdfbbc))
+
 ## [0.8.2](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.1...v0.8.2) (2026-04-21)
 
 
