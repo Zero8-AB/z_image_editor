@@ -266,8 +266,8 @@ class ImageProcessing {
     required ImageEditorState state,
     ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
-    final encoded =
-        await _renderWysiwygToBytes(bytes: bytes, state: state, outputFormat: outputFormat);
+    final encoded = await _renderWysiwygToBytes(
+        bytes: bytes, state: state, outputFormat: outputFormat);
     final tempDir = Directory.systemTemp;
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final ext = outputFormat == ImageOutputFormat.jpeg ? 'jpg' : 'png';
