@@ -450,21 +450,28 @@ class ImageProcessing {
     }
   }
 
+  /// Applies brightness/contrast/saturation with exactly the colour matrix
+  /// the live preview and the WYSIWYG export use ([ColorFilterMatrix]), so
+  /// the pixel fallback looks the same. (`img.adjustColor` treats brightness
+  /// as a multiplier, which turned +50 white and -50 black.)
   static img.Image _applyColorAdjustments(
     img.Image image, {
     required double brightness,
     required double contrast,
     required double saturation,
   }) {
-    if (brightness != 0) {
-      final brightnessValue = (brightness * 2.55).toInt();
-      image = img.adjustColor(image, brightness: brightnessValue);
-    }
-    if (contrast != 1.0) {
-      image = img.adjustColor(image, contrast: contrast);
-    }
-    if (saturation != 1.0) {
-      image = img.adjustColor(image, saturation: saturation);
+    if (brightness == 0 && contrast == 1.0 && saturation == 1.0) return image;
+    final m = ColorFilterMatrix.combinedMatrix(
+      brightness: brightness,
+      contrast: contrast,
+      saturation: saturation,
+    );
+    for (final p in image) {
+      final r = p.r.toDouble(), g = p.g.toDouble(), b = p.b.toDouble();
+      p
+        ..r = (m[0] * r + m[1] * g + m[2] * b + m[4]).clamp(0, 255).round()
+        ..g = (m[5] * r + m[6] * g + m[7] * b + m[9]).clamp(0, 255).round()
+        ..b = (m[10] * r + m[11] * g + m[12] * b + m[14]).clamp(0, 255).round();
     }
     return image;
   }
@@ -583,6 +590,18 @@ class ColorFilterMatrix {
     required double brightness,
     required double contrast,
     required double saturation,
+  }) =>
+      ColorFilter.matrix(combinedMatrix(
+        brightness: brightness,
+        contrast: contrast,
+        saturation: saturation,
+      ));
+
+  /// The 4x5 row-major matrix behind [combined].
+  static List<double> combinedMatrix({
+    required double brightness,
+    required double contrast,
+    required double saturation,
   }) {
     // Combine all filters
     final b = brightness / 100;
@@ -596,7 +615,7 @@ class ColorFilterMatrix {
 
     final t = (1.0 - c) / 2.0 * 255 + b * 255;
 
-    return ColorFilter.matrix([
+    return [
       (R + s) * c,
       G * c,
       B * c,
@@ -617,6 +636,6 @@ class ColorFilterMatrix {
       0,
       1,
       0,
-    ]);
+    ];
   }
 }
