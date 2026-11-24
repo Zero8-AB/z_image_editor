@@ -390,6 +390,69 @@ void main() {
     });
   });
 
+  group('review fixes', () {
+    test('indexed (palette) PNGs are expanded before warping', () {
+      final rgb = img.Image(width: 40, height: 20);
+      img.fill(rgb, color: img.ColorRgb8(0, 0, 255));
+      img.fillRect(rgb,
+          x1: 0, y1: 0, x2: 19, y2: 19, color: img.ColorRgb8(255, 0, 0));
+      final indexed = img.quantize(rgb, numberOfColors: 4);
+      expect(indexed.hasPalette, isTrue);
+      final png = Uint8List.fromList(img.encodePng(indexed));
+      expect(img.decodePng(png)!.hasPalette, isTrue);
+      final out = img.decodeJpg(
+        ZPerspectiveWarp.warpBytesSync(png, ZQuadMath.fullImage),
+      )!;
+      final left = out.getPixel(5, 10), right = out.getPixel(35, 10);
+      expect(left.r, greaterThan(200));
+      expect(left.b, lessThan(60));
+      expect(right.b, greaterThan(200));
+      expect(right.r, lessThan(60));
+    });
+
+    test('1-bit images are expanded too', () {
+      final bw = img.Image(width: 16, height: 8, format: img.Format.uint1);
+      for (var y = 0; y < 8; y++) {
+        for (var x = 0; x < 8; x++) {
+          bw.setPixelRgb(x, y, 1, 1, 1);
+        }
+      }
+      final out = ZPerspectiveWarp.warpImage(bw, const [
+        Offset(0, 0),
+        Offset(16, 0),
+        Offset(16, 8),
+        Offset(0, 8),
+      ]);
+      expect(out.getPixel(2, 4).r, 255);
+      expect(out.getPixel(13, 4).r, 0);
+    });
+
+    test('output is capped at 6000 px by default', () {
+      expect(ZPerspectiveWarp.defaultMaxOutputSide, 6000);
+      final s = ZQuadMath.warpOutputSize(
+        const [
+          Offset(0, 0),
+          Offset(8000, 0),
+          Offset(8000, 6000),
+          Offset(0, 6000)
+        ],
+        maxSide: ZPerspectiveWarp.defaultMaxOutputSide,
+      );
+      expect(s, const Size(6000, 4500));
+    });
+
+    test('large sources are scaled down before warping', () {
+      final big = img.Image(width: 1600, height: 1200);
+      final out = img.decodeJpg(ZPerspectiveWarp.warpBytesSync(
+        Uint8List.fromList(img.encodeJpg(big)),
+        ZQuadMath.fullImage,
+        maxSide: 400,
+      ))!;
+      expect(out.width, 400);
+      expect(out.height, 300);
+    });
+  });
+
   test('ZFrameCandidate requires four corners', () {
     expect(
       () => ZFrameCandidate(corners: const [Offset.zero], label: 'x'),

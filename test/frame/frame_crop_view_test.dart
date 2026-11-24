@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -59,12 +60,31 @@ class Harness {
   Uint8List? warpedSource;
 }
 
+class SlowDetector extends ZFrameDetector {
+  final completer = Completer<List<ZFrameCandidate>>();
+  int calls = 0;
+  @override
+  Future<List<ZFrameCandidate>> detect(Uint8List imageBytes) {
+    calls++;
+    return completer.future;
+  }
+}
+
+class SlowEnhancer extends ZImageEnhancer {
+  final completer = Completer<Uint8List?>();
+  @override
+  String get label => 'No reflections';
+  @override
+  Future<Uint8List?> apply(Uint8List imageBytes) => completer.future;
+}
+
 Future<Harness> pumpFrame(
   WidgetTester tester, {
   ZFrameDetector? detector,
   ZImageEnhancer? enhancer,
   Uint8List? bytes,
   FrameCropResult? previous,
+  FrameWarpFunction? warp,
 }) async {
   final h = Harness();
   tester.view.physicalSize = const Size(390, 844);
@@ -80,11 +100,12 @@ Future<Harness> pumpFrame(
         previous: previous,
         onCancel: () => h.cancelled = true,
         onContinue: (r) => h.result = r,
-        warp: (b, c) async {
-          h.warpedSource = b;
-          h.warpedCorners = c;
-          return Uint8List.fromList([1, 2, 3]);
-        },
+        warp: warp ??
+            (b, c) async {
+              h.warpedSource = b;
+              h.warpedCorners = c;
+              return Uint8List.fromList([1, 2, 3]);
+            },
       ),
     ));
     // Let the image decode and the fakes complete.
@@ -397,5 +418,64 @@ void main() {
     await pumpFrame(tester, detector: det, previous: previous);
     expect(det.calls, 0);
     expect(find.text('Painting · edited'), findsOneWidget);
+  });
+
+  group('review fixes', () {
+    ZPrimaryButton next(WidgetTester tester) => tester
+        .widget<ZPrimaryButton>(find.byKey(const Key('z_frame_continue')));
+
+    testWidgets('Next is disabled and busy while the detector runs',
+        (tester) async {
+      final det = SlowDetector();
+      await pumpFrame(tester, detector: det);
+      expect(next(tester).onPressed, isNull);
+      expect(next(tester).busy, isTrue);
+      det.completer.complete(threeCandidates);
+      await settleAsync(tester, 3);
+      expect(next(tester).onPressed, isNotNull);
+      expect(next(tester).busy, isFalse);
+    });
+
+    testWidgets('Next is disabled while the enhancer runs', (tester) async {
+      final enh = SlowEnhancer();
+      await pumpFrame(tester, enhancer: enh);
+      expect(next(tester).onPressed, isNull);
+      enh.completer.complete(null);
+      await settleAsync(tester, 3);
+      expect(next(tester).onPressed, isNotNull);
+    });
+
+    testWidgets('reopening re-detects when detection had not finished',
+        (tester) async {
+      final det = FakeDetector(threeCandidates);
+      await pumpFrame(
+        tester,
+        detector: det,
+        previous: const FrameCropResult(
+          outputBytes: null,
+          corners: ZQuadMath.fullImage,
+          candidates: [],
+          detectionDone: false,
+        ),
+      );
+      expect(det.calls, 1);
+      expect(find.text('With frame'), findsOneWidget);
+    });
+
+    testWidgets('corners are locked while Next is applying', (tester) async {
+      final warpDone = Completer<Uint8List>();
+      await pumpFrame(
+        tester,
+        detector: FakeDetector(threeCandidates),
+        warp: (b, c) => warpDone.future,
+      );
+      await tester.tap(find.byKey(const Key('z_frame_continue')));
+      await tester.pump();
+      final before = handle(tester, 0);
+      await dragStepwise(tester, before, const Offset(30, 30));
+      expect(handle(tester, 0), before);
+      warpDone.complete(Uint8List.fromList([1]));
+      await settleAsync(tester, 3);
+    });
   });
 }

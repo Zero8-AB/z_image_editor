@@ -212,6 +212,16 @@ if (!kIsWeb) {
 
 All parameters are optional beyond the platform-appropriate image input and save callback.
 
+### Output files (mobile)
+
+`onSaveAll` always receives **new temp files**, never the `File` objects you
+passed in, so you can delete or move them freely. With
+`ImageOutputFormat.auto` / `original` and no edits, the file is a
+byte-identical copy of the input, named after its real format from the magic
+bytes (`.jpg`, `.png`, `.webp`, `.heic`, `.gif`, …; the input name's
+extension when the format is unknown). Edited images are re-encoded (`.png`
+or `.jpg`).
+
 ### Button labels
 
 Localise or customise the header buttons:
@@ -328,6 +338,14 @@ ZImageEditor(
 - `ZImageEnhancer.apply` returns the fixed image or `null` ("nothing to fix",
   toggle hidden). Its output must keep the input's displayed orientation and
   aspect ratio.
+- The straightened image is capped at 6000 px on its long side
+  (`ZPerspectiveWarp.defaultMaxOutputSide`); larger sources are scaled down
+  before the warp to bound memory. Palette/indexed and 1-bit images work.
+- "Next" is disabled (with a spinner) while the detector or the enhancer is
+  still running.
+- Going back to the frame step and pressing Next without changing the outline
+  keeps the editor's crop/adjust edits; a new outline keeps the colour
+  adjustments only.
 - Web: works (the warp is pure Dart); pass no native detector there.
 - `ZQuadMath` and `ZPerspectiveWarp` are exported for detectors and tests.
 

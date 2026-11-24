@@ -14,6 +14,11 @@ import 'quad_math.dart';
 class ZPerspectiveWarp {
   ZPerspectiveWarp._();
 
+  /// Default cap on the output's longer side. A 48 MP photo straightened at
+  /// full size needs hundreds of MB; 6000 px keeps more detail than the
+  /// upload pipeline uses while bounding memory.
+  static const int defaultMaxOutputSide = 6000;
+
   /// Decodes [bytes], applies EXIF orientation, rectifies the quad given by
   /// normalized [corners] (TL, TR, BR, BL) and re-encodes the result
   /// (JPEG, or PNG when the source has an alpha channel).
@@ -23,7 +28,7 @@ class ZPerspectiveWarp {
     Uint8List bytes,
     List<Offset> corners, {
     int jpegQuality = 95,
-    int? maxSide,
+    int? maxSide = defaultMaxOutputSide,
   }) {
     final flat = <double>[
       for (final c in corners) ...[c.dx, c.dy]
@@ -40,13 +45,25 @@ class ZPerspectiveWarp {
     Uint8List bytes,
     List<Offset> corners, {
     int jpegQuality = 95,
-    int? maxSide,
+    int? maxSide = defaultMaxOutputSide,
   }) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) {
       throw const FormatException('Could not decode the image');
     }
-    final src = img.bakeOrientation(decoded);
+    var src = img.bakeOrientation(decoded);
+    // Very large sources (e.g. 48 MP) are scaled down first so the warp's
+    // working copies stay bounded; the output is capped at [maxSide] anyway.
+    final longest = src.width > src.height ? src.width : src.height;
+    if (maxSide != null && longest > maxSide * 1.25) {
+      final s = maxSide * 1.25 / longest;
+      src = img.copyResize(
+        src,
+        width: (src.width * s).round(),
+        height: (src.height * s).round(),
+        interpolation: img.Interpolation.average,
+      );
+    }
     final pixelQuad = [
       for (final c in corners) Offset(c.dx * src.width, c.dy * src.height),
     ];
@@ -66,9 +83,17 @@ class ZPerspectiveWarp {
     int? maxSide,
   }) {
     final channels = src.hasAlpha ? 4 : 3;
-    final rgb = (src.format == img.Format.uint8 && src.numChannels == channels)
+    // Palette (indexed, incl. 1/2/4-bit) and non-8-bit images are expanded
+    // to plain 8-bit RGB(A) first: their raw bytes are indices or packed.
+    final rgb = (!src.hasPalette &&
+            src.format == img.Format.uint8 &&
+            src.numChannels == channels)
         ? src
-        : src.convert(format: img.Format.uint8, numChannels: channels);
+        : src.convert(
+            format: img.Format.uint8,
+            numChannels: channels,
+            alpha: channels == 4 ? 255 : null,
+          );
     final srcBytes = rgb.getBytes(
       order: channels == 4 ? img.ChannelOrder.rgba : img.ChannelOrder.rgb,
     );

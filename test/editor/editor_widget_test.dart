@@ -60,6 +60,38 @@ void main() {
     expect(saved, hasLength(1));
     final out = await tester.runAsync(() => saved!.first.readAsBytes());
     expect(out, input);
+    expect(saved!.first.path, endsWith('.png'));
+  });
+
+  testWidgets('Done without edits never returns the caller\'s own File',
+      (tester) async {
+    final input = testPng(w: 300, h: 200);
+    final dir = await tester
+        .runAsync(() => Directory.systemTemp.createTemp('z_image_editor_test'));
+    final original = File('${dir!.path}/photo.jpeg');
+    await tester.runAsync(() => original.writeAsBytes(input));
+    List<File>? saved;
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageFiles: [original],
+        onSaveAll: (f) => saved = f,
+        onCancel: () {},
+      ),
+    );
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Done'));
+      for (var i = 0; i < 40 && saved == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      }
+    });
+    final out = saved!.single;
+    expect(out.path, isNot(original.path));
+    // Extension from the content (PNG), not the misleading original name.
+    expect(out.path, endsWith('.png'));
+    expect(out.path, isNot(endsWith('.tmp')));
+    expect(await tester.runAsync(() => out.readAsBytes()), input);
   });
 
   testWidgets('dragging the top-left crop handle inward shrinks the crop',

@@ -43,11 +43,7 @@ class ImageEditorController extends ChangeNotifier {
     _redoStack.add(_state);
     // Preserve UI-only fields so undo never switches tabs or changes layout.
     final restored = _undoStack.removeLast();
-    _updateState(restored.copyWith(
-      currentTab: _state.currentTab,
-      displaySize: _state.displaySize,
-      imageSize: _state.imageSize,
-    ));
+    _updateState(_restoreForCurrentViewport(restored));
   }
 
   /// Redo the last undone action.
@@ -55,11 +51,31 @@ class ImageEditorController extends ChangeNotifier {
     if (_redoStack.isEmpty) return;
     _undoStack.add(_state);
     final restored = _redoStack.removeLast();
-    _updateState(restored.copyWith(
+    _updateState(_restoreForCurrentViewport(restored));
+  }
+
+  /// Restores a history entry with today's UI fields. A crop rect saved
+  /// under a different viewport size is mapped to the current one.
+  ImageEditorState _restoreForCurrentViewport(ImageEditorState restored) {
+    final from = restored.displaySize;
+    final to = _state.displaySize;
+    final img = _state.imageSize ?? restored.imageSize;
+    final crop = restored.cropRect;
+    CropRect? mapped;
+    if (crop != null &&
+        from != null &&
+        to != null &&
+        img != null &&
+        from != to) {
+      mapped = _remapCropForViewport(crop, from, to, img, restored.panOffset);
+      transformationService.clearCache();
+    }
+    return restored.copyWith(
       currentTab: _state.currentTab,
       displaySize: _state.displaySize,
       imageSize: _state.imageSize,
-    ));
+      cropRect: mapped,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────

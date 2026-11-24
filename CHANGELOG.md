@@ -7,9 +7,12 @@
 * optional perspective "frame" step (`frameDetector`, `startWithFrameCrop`, `ZFrameCandidate`, `ZQuadMath`, `ZPerspectiveWarp`): choose a four-corner outline from up to three detector suggestions or drag the corners (with magnifier), rotate, then continue editing the straightened image
 * optional enhancer toggle in the frame step (`imageEnhancer`, `ZImageEnhancer`), on by default
 * `ZImageEditorTheme` for the editor chrome and the frame step; the default keeps the current look
+* frame step: output capped at 6000 px (`ZPerspectiveWarp.defaultMaxOutputSide`), palette/1-bit sources supported, Next disabled while detection/enhancement runs, load errors shown with Cancel, edits kept when the outline is unchanged
 
 ### Bug Fixes
 
+* unmodified images are returned as a byte-identical copy in a new temp file with the correct extension (from the magic bytes), never as the caller's own `File` and never as `.tmp`
+* undo/redo map the crop rect to the current canvas size
 * unmodified images are returned without re-encoding again (the initial fitted crop rect counted as an edit)
 * the crop rect stays on the same image area when the canvas changes height (switching tabs, aspect-ratio strip)
 * `TransformationService.clampPanOffset` no longer throws when the allowed pan range is empty

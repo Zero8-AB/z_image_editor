@@ -38,6 +38,10 @@ class FrameCropResult {
   /// The detector's candidates, so reopening the step does not detect again.
   final List<ZFrameCandidate> candidates;
 
+  /// Whether detection finished (an empty [candidates] then means "nothing
+  /// found", not "not run yet").
+  final bool detectionDone;
+
   /// Whether the enhancer toggle was on.
   final bool enhanceOn;
 
@@ -52,6 +56,7 @@ class FrameCropResult {
     required this.corners,
     required this.candidates,
     this.quarterTurns = 0,
+    this.detectionDone = true,
     this.baseCandidate,
     this.edited = false,
     this.enhanceOn = false,
@@ -197,7 +202,7 @@ class _FrameCropViewState extends State<FrameCropView> {
       _enhanceOn = previous.enhanceOn;
     }
     _decode();
-    if (previous != null) {
+    if (previous != null && previous.detectionDone) {
       _setCandidates(previous.candidates);
     } else if (widget.detector != null) {
       _detect();
@@ -338,6 +343,7 @@ class _FrameCropViewState extends State<FrameCropView> {
   }
 
   void _moveCorner(int index, Offset delta, Rect fitted) {
+    if (_applying) return;
     final moved = List.of(_corners);
     moved[index] = ZQuadMath.clampUnit(
       moved[index] + Offset(delta.dx / fitted.width, delta.dy / fitted.height),
@@ -355,7 +361,7 @@ class _FrameCropViewState extends State<FrameCropView> {
   }
 
   Future<void> _continue() async {
-    if (_applying || _image == null) return;
+    if (_applying || _detecting || _enhancing || _image == null) return;
     final corners = List<Offset>.unmodifiable(_corners);
     final enhanced = _enhanceOn ? _enhancedBytes : null;
     FrameCropResult result(Uint8List? out) => FrameCropResult(
@@ -365,6 +371,7 @@ class _FrameCropViewState extends State<FrameCropView> {
           baseCandidate: _base,
           edited: _edited,
           candidates: _candidates,
+          detectionDone: !_detecting,
           enhanceOn: _enhanceOn,
           enhancedBytes: _enhancedBytes,
           enhancerRan: _enhancerRan,
@@ -420,9 +427,11 @@ class _FrameCropViewState extends State<FrameCropView> {
             title: labels.title,
             cancelLabel: widget.cancelLabel,
             continueLabel: labels.continueLabel,
-            busy: _applying,
+            busy: _applying || _detecting || _enhancing,
             onCancel: _applying ? null : widget.onCancel,
-            onContinue: _applying || _image == null ? null : _continue,
+            onContinue: _applying || _detecting || _enhancing || _image == null
+                ? null
+                : _continue,
           ),
           Expanded(child: _buildCanvas()),
           Container(
@@ -610,7 +619,9 @@ class _FrameCropViewState extends State<FrameCropView> {
                   key: Key('z_frame_handle_$i'),
                   theme: _theme,
                   active: _dragCorner == i,
-                  onStart: () => setState(() => _dragCorner = i),
+                  onStart: () {
+                    if (!_applying) setState(() => _dragCorner = i);
+                  },
                   onMove: (delta) => _moveCorner(i, delta, fitted),
                   onEnd: () => setState(() => _dragCorner = null),
                 ),

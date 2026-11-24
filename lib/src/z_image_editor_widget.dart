@@ -14,6 +14,7 @@ import 'package:z_image_editor/src/models/image_editor_state.dart';
 import 'package:z_image_editor/src/models/image_output_format.dart';
 import 'package:z_image_editor/src/theme/themed_controls.dart';
 import 'package:z_image_editor/src/theme/z_image_editor_theme.dart';
+import 'package:z_image_editor/src/utils/image_format_sniffer.dart';
 import 'package:z_image_editor/src/utils/image_processing.dart';
 import 'package:z_image_editor/src/widgets/adjustment_controls.dart';
 import 'package:z_image_editor/src/widgets/crop_controls.dart';
@@ -215,6 +216,23 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   void _onFrameContinue(FrameCropResult result) {
+    final previous = _frameResults[_currentIndex];
+    // Reopened and nothing changed: keep the editor's crop/adjust edits.
+    final unchanged = _frameReopened &&
+        previous != null &&
+        previous.quarterTurns == result.quarterTurns &&
+        previous.enhanceOn == result.enhanceOn &&
+        _sameCorners(previous.corners, result.corners);
+    if (unchanged) {
+      setState(() {
+        _frameResults[_currentIndex] = result;
+        _inFrameStep = false;
+      });
+      return;
+    }
+    // The image changed: crop/rotation no longer apply, but keep the colour
+    // adjustments.
+    final kept = _controller.state;
     setState(() {
       _frameResults[_currentIndex] = result;
       final warped = result.outputBytes;
@@ -231,9 +249,22 @@ class _ZImageEditorState extends State<ZImageEditor> {
       imageFile: _currentImageFile,
       imageBytes: _currentImageBytes,
     );
+    if (_frameReopened) {
+      _controller.setBrightness(kept.brightness);
+      _controller.setContrast(kept.contrast);
+      _controller.setSaturation(kept.saturation);
+    }
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
+  }
+
+  static bool _sameCorners(List<Offset> a, List<Offset> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if ((a[i] - b[i]).distance > 1e-6) return false;
+    }
+    return true;
   }
 
   @override
@@ -363,15 +394,11 @@ class _ZImageEditorState extends State<ZImageEditor> {
         (outputFormat == ImageOutputFormat.auto ||
             outputFormat == ImageOutputFormat.original);
 
-    if (skipConversion && currentFile != null) {
-      processedFile = currentFile;
-    } else if (skipConversion && currentBytes != null) {
-      // Write the original bytes to a temp file without re-encoding.
-      final tempDir = Directory.systemTemp;
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final tempFile = File('${tempDir.path}/edited_$timestamp.tmp');
-      await tempFile.writeAsBytes(currentBytes);
-      processedFile = tempFile;
+    if (skipConversion && (currentFile != null || currentBytes != null)) {
+      // Unmodified: hand back a byte-identical copy in a new temp file with
+      // the right extension, never the caller's own File.
+      final bytes = currentBytes ?? await currentFile!.readAsBytes();
+      processedFile = await _writeUnmodifiedCopy(bytes, currentFile?.path);
     } else if (currentFile != null) {
       processedFile = await ImageProcessing.processImage(
         originalFile: currentFile,
@@ -394,6 +421,25 @@ class _ZImageEditorState extends State<ZImageEditor> {
     } else {
       await _advanceToNextImage(processedFile);
     }
+  }
+
+  /// Writes [bytes] unchanged to a new temp file named after their format
+  /// (magic bytes; falls back to [originalPath]'s extension, then `img`).
+  Future<File> _writeUnmodifiedCopy(
+      Uint8List bytes, String? originalPath) async {
+    var ext = imageExtensionFromBytes(bytes);
+    if (ext == null && originalPath != null) {
+      final dot = originalPath.lastIndexOf('.');
+      final slash = originalPath.lastIndexOf('/');
+      if (dot > slash && dot < originalPath.length - 1) {
+        ext = originalPath.substring(dot + 1).toLowerCase();
+      }
+    }
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final file =
+        File('${Directory.systemTemp.path}/edited_$timestamp.${ext ?? 'img'}');
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
   }
 
   Future<void> _handleSaveWeb() async {
@@ -447,6 +493,15 @@ class _ZImageEditorState extends State<ZImageEditor> {
       future: _frameSourceBytes,
       builder: (context, snapshot) {
         final bytes = snapshot.data;
+        if (snapshot.hasError) {
+          return _FrameLoadError(
+            theme: widget.theme,
+            cancelLabel: widget.cancelLabel,
+            onCancel: _frameReopened
+                ? () => setState(() => _inFrameStep = false)
+                : widget.onCancel,
+          );
+        }
         if (bytes == null) {
           return const Material(
             color: Colors.black,
@@ -1283,6 +1338,47 @@ class _ZImageEditorState extends State<ZImageEditor> {
           settings: widget.cropTabSettings,
         ),
       ],
+    );
+  }
+}
+
+/// Shown when the image for the frame step cannot be read.
+class _FrameLoadError extends StatelessWidget {
+  final ZImageEditorTheme theme;
+  final String cancelLabel;
+  final VoidCallback onCancel;
+
+  const _FrameLoadError({
+    required this.theme,
+    required this.cancelLabel,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: theme.backgroundColor,
+      child: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Could not open the image',
+                key: const Key('z_frame_load_error'),
+                style: theme.text(color: theme.mutedTextColor),
+              ),
+              const SizedBox(height: 16),
+              ZSecondaryButton(
+                key: const Key('z_frame_error_cancel'),
+                theme: theme,
+                label: cancelLabel,
+                onPressed: onCancel,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

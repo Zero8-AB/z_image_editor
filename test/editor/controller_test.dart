@@ -271,4 +271,24 @@ void main() {
       expect(p.label, isNotEmpty);
     }
   });
+
+  test('undo maps a crop saved under another viewport size', () {
+    final c = loaded();
+    final f = c.state.cropRect!;
+    c.setCropRect(CropRect(
+      left: f.left + 0.1,
+      top: f.top + 0.05,
+      width: f.width - 0.2,
+      height: f.height - 0.1,
+    ));
+    c.flipHorizontal(); // history entry holds the crop at 400x600
+    final atOld = c.state.cropRect!;
+    c.setDisplaySize(const Size(400, 500));
+    final atNew = c.state.cropRect!;
+    c.undo();
+    final restored = c.state.cropRect!;
+    expect(restored.top, closeTo(atNew.top, 1e-9));
+    expect(restored.height, closeTo(atNew.height, 1e-9));
+    expect(restored.top, isNot(closeTo(atOld.top, 1e-6)));
+  });
 }

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:z_image_editor/src/widgets/image_canvas.dart';
-import 'package:z_image_editor/z_image_editor.dart';
+import 'package:z_image_editor/image_editor.dart';
 
 import '../helpers.dart';
 import 'frame_crop_view_test.dart' show FakeDetector, rect;
@@ -149,5 +149,62 @@ void main() {
     await tester.tap(adjust);
     await settleAsync(tester, 5);
     expect(find.text('Adjust'), findsWidgets);
+  });
+
+  testWidgets('an unreadable file shows an error with Cancel', (tester) async {
+    var cancelled = false;
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageFiles: [File('/nonexistent/z_image_editor_test.jpg')],
+        startWithFrameCrop: true,
+        onSaveAll: (_) {},
+        onCancel: () => cancelled = true,
+      ),
+    );
+    expect(find.byKey(const Key('z_frame_load_error')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('z_frame_error_cancel')));
+    expect(cancelled, isTrue);
+  });
+
+  testWidgets(
+      'back to Frame + Next without changes keeps the edits; '
+      'a new outline keeps the colour adjustments', (tester) async {
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageBytesList: [testPng(w: 300, h: 400)],
+        frameDetector:
+            FakeDetector([rect('With frame', 0.1), rect('Painting', 0.25)]),
+        onSaveAll: (_) {},
+        onCancel: () {},
+      ),
+    );
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    ImageEditorController c() =>
+        tester.widget<ImageCanvas>(find.byType(ImageCanvas)).controller;
+    c().setBrightness(30);
+    c().flipHorizontal();
+    await tester.pump();
+
+    // Unchanged quad: everything kept.
+    await tester.tap(find.byKey(const Key('z_editor_cancel')));
+    await settleAsync(tester);
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    expect(c().state.brightness, 30);
+    expect(c().state.flipHorizontal, isTrue);
+
+    // Another outline: geometry resets, adjustments stay.
+    await tester.tap(find.byKey(const Key('z_editor_cancel')));
+    await settleAsync(tester);
+    await tester.ensureVisible(find.byKey(const Key('z_frame_chip_1')));
+    await tester.tap(find.byKey(const Key('z_frame_chip_1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    expect(c().state.brightness, 30);
+    expect(c().state.flipHorizontal, isFalse);
   });
 }
