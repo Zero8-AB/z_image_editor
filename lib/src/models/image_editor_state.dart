@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:io'
     if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
 import 'dart:typed_data';
@@ -105,9 +106,29 @@ class ImageEditorState {
       tiltVertical != 0.0 ||
       flipHorizontal ||
       flipVertical ||
-      cropRect != null ||
+      !_cropIsWholeImage ||
       scale != 1.0 ||
       panOffset != Offset.zero;
+
+  /// Whether [cropRect] is unset or just the initial fitted-image rect (what
+  /// the controller sets on load / reset), which is not an edit.
+  bool get _cropIsWholeImage {
+    final crop = cropRect;
+    if (crop == null) return true;
+    final img = imageSize;
+    final vp = displaySize;
+    if (img == null || vp == null || img.isEmpty || vp.isEmpty) return false;
+    final fit = math.min(vp.width / img.width, vp.height / img.height);
+    final fitW = img.width * fit;
+    final fitH = img.height * fit;
+    // Half a viewport pixel of tolerance.
+    final tx = 0.5 / vp.width;
+    final ty = 0.5 / vp.height;
+    return (crop.left - (vp.width - fitW) / 2 / vp.width).abs() <= tx &&
+        (crop.top - (vp.height - fitH) / 2 / vp.height).abs() <= ty &&
+        (crop.width - fitW / vp.width).abs() <= tx &&
+        (crop.height - fitH / vp.height).abs() <= ty;
+  }
 
   /// Get the total rotation angle in degrees
   double get totalRotation => rotation + fineRotation;
