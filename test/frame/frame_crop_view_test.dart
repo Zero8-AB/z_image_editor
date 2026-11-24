@@ -116,6 +116,28 @@ void main() {
     expect(selected(tester, 'z_frame_chip_1'), isFalse);
   });
 
+  testWidgets('pre-selects the candidate marked preselected', (tester) async {
+    await pumpFrame(tester,
+        detector: FakeDetector([
+          rect('Painting', 0.3),
+          rect('With mat', 0.2),
+          ZFrameCandidate(
+            label: 'With frame',
+            preselected: true,
+            corners: rect('x', 0.1).corners,
+          ),
+        ]));
+    expect(selected(tester, 'z_frame_chip_2'), isTrue);
+    expect(selected(tester, 'z_frame_chip_0'), isFalse);
+    // Reset returns to it, too.
+    await tester.ensureVisible(find.byKey(const Key('z_frame_chip_0')));
+    await tester.tap(find.byKey(const Key('z_frame_chip_0')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('z_frame_reset')));
+    await tester.pump();
+    expect(selected(tester, 'z_frame_chip_2'), isTrue);
+  });
+
   testWidgets('never shows more than three chips', (tester) async {
     await pumpFrame(tester,
         detector: FakeDetector([...threeCandidates, rect('Extra', 0.4)]));

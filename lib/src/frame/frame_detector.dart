@@ -18,10 +18,15 @@ class ZFrameCandidate {
   /// keeps the order in which the detector returned the candidates.
   final double score;
 
+  /// Whether this outline is selected when the frame step opens (and what
+  /// Reset returns to). When no candidate sets it, the first one is used.
+  final bool preselected;
+
   ZFrameCandidate({
     required List<Offset> corners,
     required this.label,
     this.score = 0,
+    this.preselected = false,
   }) : corners = List.unmodifiable(corners) {
     if (corners.length != 4) {
       throw ArgumentError.value(
@@ -42,8 +47,9 @@ class ZFrameCandidate {
 /// dependencies: apps plug in their own (for example an OpenCV contour
 /// detector) and pass it to `ZImageEditor.frameDetector`.
 ///
-/// The editor shows the candidates as chips **in the returned order** and
-/// pre-selects the first one, so return the preferred outline first.
+/// The editor shows the candidates as chips **in the returned order** (at
+/// most three) and pre-selects the one marked [ZFrameCandidate.preselected],
+/// else the first.
 /// Return an empty list when nothing reliable was found; the user then drags
 /// the corners by hand. Errors thrown here are caught and treated as "nothing
 /// found".

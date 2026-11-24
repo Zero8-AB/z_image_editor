@@ -319,8 +319,8 @@ ZImageEditor(
 )
 ```
 
-- Candidates are shown in the order returned (max. 3); the first is
-  pre-selected. Tapping the photo cycles through them and the full photo.
+- Candidates are shown in the order returned (max. 3). The one with
+  `preselected: true` (else the first) is selected at start and by Reset. Tapping the photo cycles through them and the full photo.
 - Errors or an empty list fall back to dragging the corners by hand.
 - `startWithFrameCrop: true` shows the step without a detector (manual
   corners); `false` hides it even with a detector. Without either, the editor

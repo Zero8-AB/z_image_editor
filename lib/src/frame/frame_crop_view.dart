@@ -164,9 +164,13 @@ class _FrameCropViewState extends State<FrameCropView> {
   ui.Image? get _displayImage =>
       _enhanceOn && _enhancedImage != null ? _enhancedImage : _image;
 
-  /// Default outline (what Reset returns to): the first candidate, else the
-  /// full photo.
-  int? get _defaultBase => _candidates.isEmpty ? null : 0;
+  /// Default outline (what Reset returns to): the pre-selected candidate,
+  /// else the first, else the full photo.
+  int? get _defaultBase {
+    if (_candidates.isEmpty) return null;
+    final i = _candidates.indexWhere((c) => c.preselected);
+    return i < 0 ? 0 : i;
+  }
 
   List<Offset> _candidateCorners(int i) =>
       ZQuadMath.rotateQuad(_candidates[i].corners, _turns);
@@ -280,15 +284,20 @@ class _FrameCropViewState extends State<FrameCropView> {
     for (final c in found) {
       final clamped = [for (final p in c.corners) ZQuadMath.clampUnit(p)];
       if (!ZQuadMath.isConvex(clamped, clockwiseOnly: true)) continue;
-      valid.add(
-          ZFrameCandidate(corners: clamped, label: c.label, score: c.score));
+      valid.add(ZFrameCandidate(
+        corners: clamped,
+        label: c.label,
+        score: c.score,
+        preselected: c.preselected,
+      ));
       if (valid.length == kMaxFrameCandidates) break;
     }
     _candidates = valid;
     if (!_userTouched) {
       _base = _defaultBase;
       _edited = false;
-      _corners = _base == null ? ZQuadMath.fullImage : _candidateCorners(0);
+      _corners =
+          _base == null ? ZQuadMath.fullImage : _candidateCorners(_base!);
     }
   }
 
@@ -323,7 +332,8 @@ class _FrameCropViewState extends State<FrameCropView> {
       _turns = 0;
       _base = _defaultBase;
       _edited = false;
-      _corners = _base == null ? ZQuadMath.fullImage : _candidateCorners(0);
+      _corners =
+          _base == null ? ZQuadMath.fullImage : _candidateCorners(_base!);
     });
   }
 
