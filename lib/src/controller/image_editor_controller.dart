@@ -473,10 +473,58 @@ class ImageEditorController extends ChangeNotifier {
   }
 
   void setDisplaySize(Size size) {
-    final updated = _state.copyWith(displaySize: size);
+    final old = _state.displaySize;
+    final crop = _state.cropRect;
+    final imgSize = _state.imageSize;
+    var updated = _state.copyWith(displaySize: size);
+    // The crop rect is stored in viewport fractions. When the canvas changes
+    // size (e.g. the header toolbar or the aspect-ratio strip changes height
+    // between tabs) re-map it so it stays on the same part of the image;
+    // otherwise it drifts onto the letterbox or off the chosen area.
+    if (old != null && old != size && crop != null && imgSize != null) {
+      updated = updated.copyWith(
+        cropRect:
+            _remapCropForViewport(crop, old, size, imgSize, _state.panOffset),
+      );
+      transformationService.clearCache();
+    }
     _state = updated;
     _maybeInitCropRect();
     notifyListeners();
+  }
+
+  /// Maps [crop] from viewport [from] to viewport [to] so it covers the same
+  /// image pixels. The image is drawn BoxFit.contain around the viewport
+  /// centre and pan is in pixels, so a viewport change is a uniform scale by
+  /// fitScale(to) / fitScale(from) about the panned image centre (pan stays in pixels).
+  static CropRect _remapCropForViewport(
+    CropRect crop,
+    Size from,
+    Size to,
+    Size imageSize,
+    Offset pan,
+  ) {
+    final fitFrom =
+        math.min(from.width / imageSize.width, from.height / imageSize.height);
+    final fitTo =
+        math.min(to.width / imageSize.width, to.height / imageSize.height);
+    final k = fitTo / fitFrom;
+    double mapX(double fx) =>
+        to.width / 2 + pan.dx + (fx * from.width - from.width / 2 - pan.dx) * k;
+    double mapY(double fy) =>
+        to.height / 2 +
+        pan.dy +
+        (fy * from.height - from.height / 2 - pan.dy) * k;
+    final left = mapX(crop.left);
+    final top = mapY(crop.top);
+    final right = mapX(crop.left + crop.width);
+    final bottom = mapY(crop.top + crop.height);
+    return CropRect(
+      left: left / to.width,
+      top: top / to.height,
+      width: (right - left) / to.width,
+      height: (bottom - top) / to.height,
+    );
   }
 
   void setImageSize(Size size) {
