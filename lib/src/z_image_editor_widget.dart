@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:z_image_editor/src/controller/image_editor_controller.dart';
+import 'package:z_image_editor/src/frame/frame_crop_view.dart';
+import 'package:z_image_editor/src/frame/frame_detector.dart';
 import 'package:z_image_editor/src/models/adjust_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_toolbar_settings.dart';
 import 'package:z_image_editor/src/models/image_editor_state.dart';
 import 'package:z_image_editor/src/models/image_output_format.dart';
+import 'package:z_image_editor/src/theme/themed_controls.dart';
+import 'package:z_image_editor/src/theme/z_image_editor_theme.dart';
 import 'package:z_image_editor/src/utils/image_processing.dart';
 import 'package:z_image_editor/src/widgets/adjustment_controls.dart';
 import 'package:z_image_editor/src/widgets/crop_controls.dart';
@@ -90,6 +94,29 @@ class ZImageEditor extends StatefulWidget {
   ///   input format from magic bytes and re-encodes to match.
   final ImageOutputFormat outputFormat;
 
+  /// Finds candidate outlines (frame, mat, artwork, ...) for the perspective
+  /// "frame" step. Setting it opens the editor in that step first, with the
+  /// candidates as chips. The package ships no detector; see
+  /// [ZFrameDetector].
+  final ZFrameDetector? frameDetector;
+
+  /// Whether to open each image in the perspective "frame" step first.
+  /// Defaults to `true` when [frameDetector] is set, `false` otherwise (the
+  /// editor then behaves exactly as without this feature). Set it to `true`
+  /// without a detector for a manual four-corner crop.
+  final bool? startWithFrameCrop;
+
+  /// Optional one-tap fix (e.g. reflection removal) offered as a toggle in the
+  /// frame step, on by default. Only used when the frame step is shown.
+  final ZImageEnhancer? imageEnhancer;
+
+  /// Texts of the frame step.
+  final ZFrameCropLabels frameCropLabels;
+
+  /// Colours, fonts and sizes of the editor chrome and the frame step.
+  /// The default reproduces the original look.
+  final ZImageEditorTheme theme;
+
   const ZImageEditor({
     super.key,
     this.imageFiles,
@@ -109,6 +136,11 @@ class ZImageEditor extends StatefulWidget {
     this.showAdjustTab = true,
     this.adjustTabSettings = const AdjustTabSettings(),
     this.outputFormat = ImageOutputFormat.auto,
+    this.frameDetector,
+    this.startWithFrameCrop,
+    this.imageEnhancer,
+    this.frameCropLabels = const ZFrameCropLabels(),
+    this.theme = const ZImageEditorTheme(),
   })  : assert(
           imageFiles != null || imageBytesList != null,
           'Provide imageFiles or imageBytesList.',
@@ -143,9 +175,66 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
   bool get _isLastImage => _currentIndex >= _totalImages - 1;
 
-  File? get _currentImageFile => widget.imageFiles?[_currentIndex];
+  // ── Frame (perspective) step state ───────────────────────────────────────
 
-  Uint8List? get _currentImageBytes => widget.imageBytesList?[_currentIndex];
+  bool get _frameCropEnabled =>
+      widget.startWithFrameCrop ?? widget.frameDetector != null;
+
+  /// Whether the current image is shown in the frame step.
+  bool _inFrameStep = false;
+
+  /// Whether the frame step was reopened from the editor (Cancel then returns
+  /// to the editor instead of closing it).
+  bool _frameReopened = false;
+
+  /// Original bytes of the current image, loaded for the frame step.
+  Future<Uint8List>? _frameSourceBytes;
+
+  /// Rectified image per index, replacing the original in the editor.
+  final Map<int, Uint8List> _frameOutputs = {};
+
+  /// Last frame-step result per index, so reopening restores it.
+  final Map<int, FrameCropResult> _frameResults = {};
+
+  File? get _currentImageFile => _frameOutputs.containsKey(_currentIndex)
+      ? null
+      : widget.imageFiles?[_currentIndex];
+
+  Uint8List? get _currentImageBytes =>
+      _frameOutputs[_currentIndex] ?? widget.imageBytesList?[_currentIndex];
+
+  void _enterFrameStep({bool reopened = false}) {
+    _dismissEditMenu();
+    _frameReopened = reopened;
+    final index = _currentIndex;
+    final bytes = widget.imageBytesList?[index];
+    _frameSourceBytes = bytes != null
+        ? Future.value(bytes)
+        : widget.imageFiles![index].readAsBytes();
+    _inFrameStep = true;
+  }
+
+  void _onFrameContinue(FrameCropResult result) {
+    setState(() {
+      _frameResults[_currentIndex] = result;
+      final warped = result.outputBytes;
+      if (warped != null) {
+        _frameOutputs[_currentIndex] = warped;
+      } else {
+        _frameOutputs.remove(_currentIndex);
+      }
+      _inFrameStep = false;
+      _isCropPortrait = false;
+      _showingAspectRatioPicker = false;
+    });
+    _controller.initialize(
+      imageFile: _currentImageFile,
+      imageBytes: _currentImageBytes,
+    );
+    if (!widget.showCropTab && widget.showAdjustTab) {
+      _controller.setTab(EditorTab.adjust);
+    }
+  }
 
   @override
   void initState() {
@@ -181,6 +270,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
+    if (_frameCropEnabled) _enterFrameStep();
     if (!kIsWeb) {
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.manual,
@@ -225,6 +315,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
+    if (_frameCropEnabled) setState(_enterFrameStep);
   }
 
   Future<void> _handleSave() async {
@@ -344,18 +435,58 @@ class _ZImageEditorState extends State<ZImageEditor> {
       if (!widget.showCropTab && widget.showAdjustTab) {
         _controller.setTab(EditorTab.adjust);
       }
+      if (_frameCropEnabled) setState(_enterFrameStep);
     }
+  }
+
+  Widget _buildFrameStep() {
+    final previous = _frameResults[_currentIndex];
+    return FutureBuilder<Uint8List>(
+      // Keyed by index so a new image gets a fresh step.
+      key: ValueKey('z_frame_step_$_currentIndex'),
+      future: _frameSourceBytes,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (bytes == null) {
+          return const Material(
+            color: Colors.black,
+            child: Center(
+              child: CupertinoActivityIndicator(color: Colors.white),
+            ),
+          );
+        }
+        return FrameCropView(
+          imageBytes: bytes,
+          detector: widget.frameDetector,
+          enhancer: widget.imageEnhancer,
+          labels: widget.frameCropLabels,
+          theme: widget.theme,
+          cancelLabel: widget.cancelLabel,
+          resetLabel: widget.resetLabel,
+          enableMagnifyingGlass: true,
+          previous: previous,
+          onCancel: _frameReopened
+              ? () => setState(() => _inFrameStep = false)
+              : widget.onCancel,
+          onContinue: _onFrameContinue,
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_inFrameStep) {
+      final step = _buildFrameStep();
+      return kIsWeb ? WebEditorShell(child: step) : step;
+    }
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, child) {
         final state = _controller.state;
 
         final editorContent = Material(
-          color: Colors.black,
+          color: widget.theme.backgroundColor,
           child: Column(
             children: [
               _buildHeader(context, state),
@@ -372,7 +503,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
               // Bottom controls
               Container(
-                color: const Color(0xFF1C1C1E),
+                color: widget.theme.panelColor,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -406,6 +537,61 @@ class _ZImageEditorState extends State<ZImageEditor> {
     );
   }
 
+  /// Cancel (or "‹ Frame" back to the frame step), optional title, and
+  /// Done/Next.
+  Widget _buildHeaderButtons({required bool web}) {
+    final t = widget.theme;
+    final backToFrame = _frameCropEnabled;
+    final row = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        ZSecondaryButton(
+          key: const Key('z_editor_cancel'),
+          theme: t,
+          label: backToFrame
+              ? widget.frameCropLabels.backToFrameLabel
+              : widget.cancelLabel,
+          showBackChevron: backToFrame,
+          onPressed: _isSaving
+              ? null
+              : backToFrame
+                  ? () => setState(() => _enterFrameStep(reopened: true))
+                  : widget.onCancel,
+        ),
+        if (web && _totalImages > 1 && !t.showTitle)
+          Text(
+            '${_currentIndex + 1} / $_totalImages',
+            style: t.text(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+        ZPrimaryButton(
+          key: const Key('z_editor_done'),
+          theme: t,
+          busy: _isSaving,
+          label: _totalImages > 1 && !_isLastImage
+              ? widget.nextLabel
+              : widget.doneLabel,
+          onPressed: _isSaving ? null : _handleSave,
+        ),
+      ],
+    );
+    if (!t.showTitle) return row;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Text(
+          _frameCropEnabled ? widget.frameCropLabels.editorTitle : '',
+          style: TextStyle(
+            color: t.textColor,
+            fontFamily: t.titleFontFamily ?? t.fontFamily,
+            fontSize: t.titleFontSize,
+            letterSpacing: 0.5,
+          ),
+        ),
+        row,
+      ],
+    );
+  }
+
   Widget _buildHeader(BuildContext context, ImageEditorState state) {
     // Web gets a clean, flat header — no safe-area / Dynamic Island logic.
     if (kIsWeb) return _buildWebHeader(context, state);
@@ -421,7 +607,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
     final hasDynamicIsland = !isAndroid && topPadding >= 50;
     final useAndroidLayout = isAndroid || !hasDynamicIsland;
     return Container(
-      color: const Color(0xFF1C1C1E),
+      color: widget.theme.panelColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -436,55 +622,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
                 ? const EdgeInsets.symmetric(horizontal: 40, vertical: 20)
                 : const EdgeInsets.symmetric(horizontal: 40),
             height: useAndroidLayout ? null : topPadding,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                SizedBox(
-                  width: 80,
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.symmetric(vertical: 0),
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(50),
-                    sizeStyle: CupertinoButtonSize.small,
-                    onPressed: _isSaving ? null : widget.onCancel,
-                    child: Text(
-                      widget.cancelLabel,
-                      style: const TextStyle(
-                        color: CupertinoColors.black,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 80,
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.symmetric(vertical: 0),
-                    onPressed: _isSaving ? null : _handleSave,
-                    color: CupertinoColors.systemYellow,
-                    borderRadius: BorderRadius.circular(50),
-                    sizeStyle: CupertinoButtonSize.small,
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CupertinoActivityIndicator(),
-                          )
-                        : Text(
-                            _totalImages > 1 && !_isLastImage
-                                ? widget.nextLabel
-                                : widget.doneLabel,
-                            style: const TextStyle(
-                              color: CupertinoColors.black,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
+            child: _buildHeaderButtons(web: false),
           ),
           // Progress counter shown below the button row so it is never
           // hidden behind the iOS notch/Dynamic Island.
@@ -529,71 +667,14 @@ class _ZImageEditorState extends State<ZImageEditor> {
   /// Clean, flat header for desktop web — no safe-area or Dynamic Island logic.
   Widget _buildWebHeader(BuildContext context, ImageEditorState state) {
     return Container(
-      color: const Color(0xFF1C1C1E),
+      color: widget.theme.panelColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                SizedBox(
-                  width: 90,
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.symmetric(vertical: 0),
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(50),
-                    sizeStyle: CupertinoButtonSize.small,
-                    onPressed: _isSaving ? null : widget.onCancel,
-                    child: Text(
-                      widget.cancelLabel,
-                      style: const TextStyle(
-                        color: CupertinoColors.black,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                if (_totalImages > 1)
-                  Text(
-                    '${_currentIndex + 1} / $_totalImages',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                SizedBox(
-                  width: 90,
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.symmetric(vertical: 0),
-                    onPressed: _isSaving ? null : _handleSave,
-                    color: CupertinoColors.systemYellow,
-                    borderRadius: BorderRadius.circular(50),
-                    sizeStyle: CupertinoButtonSize.small,
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CupertinoActivityIndicator(),
-                          )
-                        : Text(
-                            _totalImages > 1 && !_isLastImage
-                                ? widget.nextLabel
-                                : widget.doneLabel,
-                            style: const TextStyle(
-                              color: CupertinoColors.black,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
+            child: _buildHeaderButtons(web: true),
           ),
           Visibility(
             visible:
@@ -625,9 +706,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
             children: [
               Container(
                 margin: const EdgeInsets.only(bottom: 8, left: 16, top: 6),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF2C2C2E),
-                  borderRadius: BorderRadius.all(Radius.circular(50)),
+                decoration: BoxDecoration(
+                  color: widget.theme.surfaceColor,
+                  borderRadius: const BorderRadius.all(Radius.circular(50)),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 height: 38,
@@ -674,8 +755,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   },
             child: Text(
               widget.resetLabel,
-              style: const TextStyle(
-                color: CupertinoColors.systemYellow,
+              style: widget.theme.text(
+                color: widget.theme.accentColor,
                 fontSize: 17,
               ),
             ),
@@ -699,9 +780,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
               child: Row(
                 children: [
                   Container(
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF2C2C2E),
-                      borderRadius: BorderRadius.all(Radius.circular(50)),
+                    decoration: BoxDecoration(
+                      color: widget.theme.surfaceColor,
+                      borderRadius: const BorderRadius.all(Radius.circular(50)),
                     ),
                     height: 38,
                     child: Padding(
@@ -748,8 +829,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
                       },
                 child: Text(
                   widget.resetLabel,
-                  style: const TextStyle(
-                    color: CupertinoColors.systemYellow,
+                  style: widget.theme.text(
+                    color: widget.theme.accentColor,
                     fontSize: 17,
                   ),
                 ),
@@ -762,9 +843,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF2C2C2E),
-                        borderRadius: BorderRadius.all(Radius.circular(50)),
+                      decoration: BoxDecoration(
+                        color: widget.theme.surfaceColor,
+                        borderRadius:
+                            const BorderRadius.all(Radius.circular(50)),
                       ),
                       height: 38,
                       child: Row(
@@ -790,10 +872,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
                               CupertinoIcons.crop,
                               size: 22,
                               color: _showingAspectRatioPicker
-                                  ? CupertinoColors.systemYellow
+                                  ? widget.theme.accentColor
                                   : state.aspectRatioPreset !=
                                           AspectRatioPreset.free
-                                      ? CupertinoColors.systemBlue
+                                      ? widget.theme.tabSelectedColor
                                       : Colors.white,
                             ),
                           ),
@@ -857,7 +939,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
               color: Colors.transparent,
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2C2C2E),
+                  color: widget.theme.surfaceColor,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
@@ -981,29 +1063,13 @@ class _ZImageEditorState extends State<ZImageEditor> {
                     (_isCropPortrait && ratio != null && ratio > 1.0)
                         ? preset.label.split(':').reversed.join(':')
                         : preset.label;
-                return Container(
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? CupertinoColors.systemGrey2
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  child: GestureDetector(
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: ZChip(
+                    theme: widget.theme,
+                    label: effectiveLabel,
+                    selected: isSelected,
                     onTap: () => _controller.setAspectRatioPreset(preset),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      child: Text(
-                        effectiveLabel,
-                        style: TextStyle(
-                          color: isSelected
-                              ? CupertinoColors.black
-                              : Colors.white70,
-                          fontSize: 14,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                    ),
                   ),
                 );
               }).toList(),
@@ -1032,7 +1098,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? CupertinoColors.systemGrey2 : Colors.transparent,
+          color:
+              isSelected ? widget.theme.chipSelectedColor : Colors.transparent,
           borderRadius: BorderRadius.circular(50),
         ),
         child: Container(
@@ -1048,6 +1115,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   Widget _buildTabSelector(BuildContext context, ImageEditorState state) {
+    if (widget.theme.toolRowTabs) return _buildToolRowTabs(context, state);
     final tabs = [
       if (widget.showAdjustTab)
         _buildTab(
@@ -1083,7 +1151,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
         child: IntrinsicWidth(
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF2C2C2E),
+              color: widget.theme.surfaceColor,
               borderRadius: BorderRadius.circular(50),
               boxShadow: [
                 BoxShadow(
@@ -1107,6 +1175,49 @@ class _ZImageEditorState extends State<ZImageEditor> {
     );
   }
 
+  /// Tabs as a flat row of line icons with labels (themed look).
+  Widget _buildToolRowTabs(BuildContext context, ImageEditorState state) {
+    final t = widget.theme;
+    final tabs = [
+      if (widget.showCropTab)
+        ZToolButton(
+          key: const Key('z_editor_tab_crop'),
+          theme: t,
+          icon: ZLineIconKind.crop,
+          label: 'Crop',
+          active: state.currentTab == EditorTab.crop,
+          activeColor: t.tabSelectedColor,
+          onTap: () => _controller.setTab(EditorTab.crop),
+        ),
+      if (widget.showAdjustTab)
+        ZToolButton(
+          key: const Key('z_editor_tab_adjust'),
+          theme: t,
+          icon: ZLineIconKind.adjust,
+          label: 'Adjust',
+          active: state.currentTab == EditorTab.adjust,
+          activeColor: t.tabSelectedColor,
+          onTap: () {
+            _controller.setTab(EditorTab.adjust);
+            setState(() => _showingAspectRatioPicker = false);
+          },
+        ),
+    ];
+    if (tabs.length < 2) return const SizedBox(height: 22);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return Container(
+      height: 64,
+      margin: EdgeInsets.fromLTRB(16, 6, 16, 8 + bottomInset),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: t.dividerColor)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: tabs,
+      ),
+    );
+  }
+
   Widget _buildTab({
     required IconData icon,
     required String label,
@@ -1126,14 +1237,18 @@ class _ZImageEditorState extends State<ZImageEditor> {
           children: [
             Icon(
               icon,
-              color: isSelected ? CupertinoColors.systemBlue : Colors.white70,
+              color: isSelected
+                  ? widget.theme.tabSelectedColor
+                  : widget.theme.mutedTextColor,
               size: 20,
             ),
             const SizedBox(height: 3),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? CupertinoColors.systemBlue : Colors.white70,
+                color: isSelected
+                    ? widget.theme.tabSelectedColor
+                    : widget.theme.mutedTextColor,
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),

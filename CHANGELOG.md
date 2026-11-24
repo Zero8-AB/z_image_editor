@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* optional perspective "frame" step (`frameDetector`, `startWithFrameCrop`, `ZFrameCandidate`, `ZQuadMath`, `ZPerspectiveWarp`): choose a four-corner outline from up to three detector suggestions or drag the corners (with magnifier), rotate, then continue editing the straightened image
+* optional enhancer toggle in the frame step (`imageEnhancer`, `ZImageEnhancer`), on by default
+* `ZImageEditorTheme` for the editor chrome and the frame step; the default keeps the current look
+
+### Bug Fixes
+
+* unmodified images are returned without re-encoding again (the initial fitted crop rect counted as an edit)
+* the crop rect stays on the same image area when the canvas changes height (switching tabs, aspect-ratio strip)
+* `TransformationService.clampPanOffset` no longer throws when the allowed pan range is empty
+* the pixel fallback export applies brightness/contrast/saturation like the preview (brightness used to turn the image white or black)
+
 ## [0.9.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.2...v0.9.0) (2026-05-25)
 
 

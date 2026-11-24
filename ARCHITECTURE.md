@@ -15,6 +15,8 @@
 11. [Gesture System](#11-gesture-system)
 12. [Visual Overlay Behaviour](#12-visual-overlay-behaviour)
 13. [Data Flow Diagram](#13-data-flow-diagram)
+14. [Frame Step (Perspective Crop)](#14-frame-step-perspective-crop)
+15. [Theme](#15-theme)
 
 ---
 
@@ -60,6 +62,14 @@ lib/
     │   └── image_editor_state.dart      — immutable state: all fields + enums + CropRect
     ├── controller/
     │   └── image_editor_controller.dart — ChangeNotifier; owns & mutates state, animations
+    ├── frame/
+    │   ├── frame_detector.dart          — ZFrameDetector / ZFrameCandidate / ZImageEnhancer / ZFrameCropLabels
+    │   ├── quad_math.dart               — ZQuadMath: ordering, convexity, homography, quarter turns
+    │   ├── perspective_warp.dart        — ZPerspectiveWarp: full-resolution rectification (pure Dart)
+    │   └── frame_crop_view.dart         — the frame step UI (FrameCropView + small presentational widgets)
+    ├── theme/
+    │   ├── z_image_editor_theme.dart    — ZImageEditorTheme: all chrome colours/fonts/sizes
+    │   └── themed_controls.dart         — ZLineIcon, ZToolButton, ZChip, ZPrimaryButton, ZSecondaryButton
     ├── utils/
     │   ├── transformation_service.dart  — all coordinate math (raycasting, clamp, coord conversion)
     │   └── image_processing.dart       — WYSIWYG export renderer + color matrix builder
@@ -413,3 +423,51 @@ CropOverlay.build() → CropOverlayPainter → draws dark overlay + white border
                      ▼
                    Reconstruct Matrix4 → ui.Canvas → PNG → File → onSave()
 ```
+
+---
+
+## 14. Frame Step (Perspective Crop)
+
+Optional first step, shown when `frameDetector` is set or
+`startWithFrameCrop: true`. Without either, nothing in this section runs.
+
+```
+ZImageEditor (_inFrameStep)
+   └── FrameCropView(imageBytes, detector, enhancer, previous)
+         ├── decode display copy (≤ 2048 px)        ui.instantiateImageCodecWithSize
+         ├── detector.detect(bytes)  → ≤ 3 candidates (invalid quads dropped)
+         ├── enhancer.apply(bytes)   → fixed bytes | null (toggle hidden)
+         └── Next → ZPerspectiveWarp.warpBytes(active bytes, corners)
+                     → FrameCropResult(outputBytes, corners, turns, …)
+ZImageEditor._onFrameContinue
+   └── _frameOutputs[index] = outputBytes → controller.initialize(imageBytes: …)
+```
+
+* **Coordinates.** Candidates are normalized (0..1) in the EXIF-oriented
+  image, TL/TR/BR/BL. The step keeps its outline in the *turned* view
+  (Rotate = quarter turns clockwise); on Next the corners are mapped back with
+  `ZQuadMath.unrotatePoint`, keeping screen order, so the warp also applies
+  the turn.
+* **Warp.** `ZQuadMath.squareToQuad` builds the projective map from the
+  output rectangle to the source quad (Heckbert); every output pixel is
+  bilinearly sampled through it, so straight lines stay straight and
+  foreshortening is corrected. Output size is the longer of each pair of
+  opposite edges (`warpOutputSize`). JPEG q95 (PNG when the source has
+  alpha). Runs in `compute` (an isolate on native, inline on web).
+* **Editing.** Dragging keeps the quad convex, clockwise and ≥ 0.25 % of the
+  image; the chip shows "· edited". Reset returns to the first candidate and
+  no turn; Full photo selects the whole image.
+* **Back to frame.** The editor header shows "‹ Frame" instead of Cancel; it
+  reopens the step with the previous `FrameCropResult` (no re-detection).
+  Cancel in a reopened step returns to the editor unchanged; Next replaces the
+  image and resets the editor's own edits.
+* **Output.** "Full photo" without turn/enhancement leaves the original
+  image untouched (so `ImageOutputFormat.auto` can still skip re-encoding).
+
+## 15. Theme
+
+`ZImageEditorTheme` is the single source of colours, fonts and sizes for the
+header buttons (`ZPrimaryButton`, `ZSecondaryButton`), chips (`ZChip`),
+tool rows (`ZToolButton` + `ZLineIcon`), tabs and the frame step painters.
+The default constructor reproduces the original look. Layout code never
+hard-codes a colour, so a new visual design is a new theme object.

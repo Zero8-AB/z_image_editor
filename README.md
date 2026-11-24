@@ -10,6 +10,9 @@
 - Adjust brightness, contrast, and saturation
 - Perspective tilt (vertical and horizontal)
 - Optional magnifying glass on crop handle drag
+- Optional perspective **frame step**: pick a four-corner outline (e.g. a framed painting) from detector suggestions or drag the corners, then continue editing the straightened image
+- Optional one-tap enhancer toggle (e.g. reflection removal) in the frame step
+- Themeable chrome (`ZImageEditorTheme`)
 - Multi-image editing (step through a batch in one session)
 - Scroll-to-zoom on desktop/web (mouse wheel and trackpad)
 - Web UI: centered floating panel, or full-screen — your choice
@@ -280,6 +283,77 @@ ZImageEditor(
 ```
 
 When only one tab is enabled the tab bar is hidden automatically.
+
+### Frame step (perspective crop)
+
+Pass a `ZFrameDetector` and the editor opens in a "choose the frame" step
+first: the photo with four draggable corners (with a magnifier), up to three
+suggested outlines as chips, and tools for Rotate, Full photo and Reset.
+"Next" straightens the chosen quad at full resolution (pure Dart, background
+isolate on native) and continues in the regular crop/adjust editor. The
+editor header then shows "‹ Frame" to go back.
+
+The package ships **no detector** (it stays free of native dependencies);
+implement the interface in your app, for example with OpenCV:
+
+```dart
+class MyDetector extends ZFrameDetector {
+  @override
+  Future<List<ZFrameCandidate>> detect(Uint8List imageBytes) async => [
+        ZFrameCandidate(
+          // Normalized 0..1, EXIF orientation applied: TL, TR, BR, BL.
+          corners: const [Offset(.1, .1), Offset(.9, .1), Offset(.9, .9), Offset(.1, .9)],
+          label: 'With frame',
+          score: 0.9,
+        ),
+      ];
+}
+
+ZImageEditor(
+  imageBytesList: [bytes],
+  frameDetector: MyDetector(),      // opens in the frame step
+  imageEnhancer: MyGlareRemover(),  // optional toggle, on by default
+  frameCropLabels: const ZFrameCropLabels(title: 'Choose the frame'),
+  onSaveAll: ...,
+  onCancel: ...,
+)
+```
+
+- Candidates are shown in the order returned (max. 3); the first is
+  pre-selected. Tapping the photo cycles through them and the full photo.
+- Errors or an empty list fall back to dragging the corners by hand.
+- `startWithFrameCrop: true` shows the step without a detector (manual
+  corners); `false` hides it even with a detector. Without either, the editor
+  behaves exactly as before.
+- `ZImageEnhancer.apply` returns the fixed image or `null` ("nothing to fix",
+  toggle hidden). Its output must keep the input's displayed orientation and
+  aspect ratio.
+- Web: works (the warp is pure Dart); pass no native detector there.
+- `ZQuadMath` and `ZPerspectiveWarp` are exported for detectors and tests.
+
+### Theme
+
+`ZImageEditorTheme` holds every colour, font and size of the chrome (header
+buttons, chips, tool rows, tabs) and of the frame step (outline, handles,
+magnifier). The default reproduces the original iOS-style look; set
+`toolRowTabs: true` and `showTitle: true` for a flat tool-row layout.
+
+```dart
+ZImageEditor(
+  theme: const ZImageEditorTheme(
+    backgroundColor: Color(0xFF1C1A1A),
+    accentColor: Color(0xFFCE5151),
+    primaryButtonColor: Color(0xFFCE5151),
+    primaryButtonRadius: 4,
+    primaryButtonHeight: 36,
+    cancelButtonColor: null, // text button
+    fontFamily: 'Jost',
+    showTitle: true,
+    toolRowTabs: true,
+  ),
+  ...
+)
+```
 
 ## Local Quality Checks
 
