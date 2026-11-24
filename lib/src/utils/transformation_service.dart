@@ -368,9 +368,14 @@ class TransformationService {
       userScale: userScale,
       cropViewport: cropViewport,
     );
+    // The range can be empty: by float noise at exactly fit scale, or for
+    // real when the crop is wider than the image's bounding box. double.clamp
+    // throws for min > max, so fall back to the middle of the two bounds.
+    double clampAxis(double v, double lo, double hi) =>
+        lo <= hi ? v.clamp(lo, hi) : (lo + hi) / 2;
     return Offset(
-      currentOffset.dx.clamp(range.minPan.dx, range.maxPan.dx),
-      currentOffset.dy.clamp(range.minPan.dy, range.maxPan.dy),
+      clampAxis(currentOffset.dx, range.minPan.dx, range.maxPan.dx),
+      clampAxis(currentOffset.dy, range.minPan.dy, range.maxPan.dy),
     );
   }
 
