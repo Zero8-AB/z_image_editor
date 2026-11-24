@@ -48,7 +48,11 @@ class EditorBadge extends StatelessWidget {
     this.label,
     this.formatFn,
     this.isZero,
+    this.accentColor = _kYellow,
   });
+
+  /// Colour of the selected badge's label and value arc.
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +62,7 @@ class EditorBadge extends StatelessWidget {
 
     final Color valueColor;
     if (isPositive) {
-      valueColor = _kYellow;
+      valueColor = accentColor;
     } else if (isNegative) {
       valueColor = Colors.white;
     } else {
@@ -105,7 +109,7 @@ class EditorBadge extends StatelessWidget {
               Text(
                 label!,
                 style: TextStyle(
-                  color: selected ? _kYellow : Colors.white54,
+                  color: selected ? accentColor : Colors.white54,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),

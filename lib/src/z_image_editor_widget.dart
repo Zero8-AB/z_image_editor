@@ -1273,10 +1273,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
       index: index,
       children: [
         AdjustmentControls(
+          accentColor: widget.theme.accentColor,
           controller: _controller,
           settings: widget.adjustTabSettings,
         ),
         CropControls(
+          accentColor: widget.theme.accentColor,
           controller: _controller,
           settings: widget.cropTabSettings,
         ),

@@ -9,11 +9,15 @@ enum _AdjParam { brightness, contrast, saturation }
 
 /// Adjustment controls — three parameter badges + iOS-style ruler slider.
 class AdjustmentControls extends StatefulWidget {
+  /// Selection colour of badges and the ruler marker.
+  final Color accentColor;
+
   final ImageEditorController controller;
   final AdjustTabSettings settings;
 
   const AdjustmentControls({
     super.key,
+    this.accentColor = const Color(0xFFFFCC00),
     required this.controller,
     this.settings = const AdjustTabSettings(),
   });
@@ -149,6 +153,7 @@ class _AdjustmentControlsState extends State<AdjustmentControls> {
                             left: cx + (i - selectedIdx) * step - half,
                             top: 0,
                             child: EditorBadge(
+                              accentColor: widget.accentColor,
                               label: badges[i].label,
                               icon: badges[i].icon,
                               value: badges[i].value,
@@ -195,7 +200,8 @@ class _AdjustmentControlsState extends State<AdjustmentControls> {
                   onHorizontalDragUpdate: (d) =>
                       _onDrag(d.delta.dx, widget.controller.state),
                   child: CustomPaint(
-                    painter: EditorRulerPainter(angle: displayAngle),
+                    painter: EditorRulerPainter(
+                        accentColor: widget.accentColor, angle: displayAngle),
                     child: const SizedBox.expand(),
                   ),
                 ),

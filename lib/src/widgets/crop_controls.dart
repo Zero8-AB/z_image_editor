@@ -10,11 +10,15 @@ enum _TiltMode { straighten, vertical, horizontal }
 
 /// Crop controls — iOS-style mode badges + ruler slider.
 class CropControls extends StatefulWidget {
+  /// Selection colour of badges and the ruler marker.
+  final Color accentColor;
+
   final ImageEditorController controller;
   final CropTabSettings settings;
 
   const CropControls({
     super.key,
+    this.accentColor = const Color(0xFFFFCC00),
     required this.controller,
     this.settings = const CropTabSettings(),
   });
@@ -126,6 +130,7 @@ class _CropControlsState extends State<CropControls> {
                             left: cx + (i - selectedIdx) * step - half,
                             top: 0,
                             child: EditorBadge(
+                              accentColor: widget.accentColor,
                               icon: badges[i].icon,
                               value: badges[i].value,
                               maxRange: badges[i].maxRange,
@@ -200,6 +205,7 @@ class _CropControlsState extends State<CropControls> {
                       widget.controller.settleAfterRulerDrag(),
                   child: CustomPaint(
                     painter: EditorRulerPainter(
+                      accentColor: widget.accentColor,
                       angle: activeValue,
                       maxRange: maxRange,
                     ),
