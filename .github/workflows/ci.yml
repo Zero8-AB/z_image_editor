@@ -25,6 +25,10 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Same Flutter as the apps that use this package (monogram pins
+          # 3.44.0). Newer stables deprecate the material/cupertino imports,
+          # which flutter analyze reports as fatal infos.
+          flutter-version: "3.44.0"
           cache: true
 
       - name: Show Flutter version
