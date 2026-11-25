@@ -367,6 +367,8 @@ sheet (height × width × depth, common sizes, depth quick picks).
   for wide art) when its shape matches within 5 %. Exact sizes show
   without "≈" and a lock icon.
 - `onArtworkSizeConfirmed` reports a size the user confirmed (after Next).
+- `onArtworkSize` reports the size the frame step shows on Next, whatever its
+  source: exact, or the "≈" estimate (`ZSizeSource.estimated`, no depth).
 - The sheet's fields, common sizes and depth chips take their colours from
   `ZImageEditorTheme.size*` (`sizeFieldColor`, `sizeFieldTextColor`,
   `sizeFieldFocusColor`, `sizeFieldEstimatedColor`, `sizeLabelColor`,

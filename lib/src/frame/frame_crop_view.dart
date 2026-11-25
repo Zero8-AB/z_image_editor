@@ -66,6 +66,11 @@ class FrameCropResult {
   /// only estimated.
   final ZArtworkSize? size;
 
+  /// The size the step showed on Next: [size] when exact, else the "≈"
+  /// estimate (source [ZSizeSource.estimated]); null when none was shown
+  /// (no size tools, or no outline to estimate from).
+  final ZArtworkSize? shownSize;
+
   /// Width / height the straightened image was given (null: no warp).
   final double? outputAspectWH;
 
@@ -93,6 +98,7 @@ class FrameCropResult {
     this.photoChecked = false,
     this.hintClosed = false,
     this.size,
+    this.shownSize,
     this.outputAspectWH,
     required this.outputBytes,
     required this.corners,
@@ -657,10 +663,12 @@ class _FrameCropViewState extends State<FrameCropView> {
     final aspectHW =
         widget.sizeTools || _exactSize != null || ellipse ? _aspectHW : null;
     final exactSize = _exactSize;
+    final shownSize = widget.sizeTools ? _shownSize : null;
     final aspectWH = aspectHW == null ? null : 1 / aspectHW;
     final fill = widget.outsideFill?.toARGB32();
     FrameCropResult result(Uint8List? out) => FrameCropResult(
           size: exactSize,
+          shownSize: shownSize,
           outputAspectWH: out == null ? null : aspectWH,
           outputBytes: out,
           corners: corners,
