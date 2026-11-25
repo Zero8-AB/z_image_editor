@@ -409,8 +409,9 @@ are then the four corners of the quad the ellipse is inscribed in (it
 touches each side at its middle, through the same perspective). The frame
 step draws the ellipse with four handles on its sides (dragging one moves
 that side) and shows "◯ Round frame found · Wrong?" above the chips while
-any outline is round or oval. "Wrong?" opens a Rectangle / Round / Oval
-menu for the current outline; there are no shape buttons. Each outline
+any outline is round or oval. A tap on that label ("Wrong?" or its text)
+opens a Rectangle / Round / Oval menu for the current outline; there are
+no shape buttons. Each outline
 keeps its own shape (a round mat opening inside a rectangular frame is
 fine). On Next a round outline is rectified to a circle (square output),
 an oval keeps its measured shape, and outside the ellipse is transparent
