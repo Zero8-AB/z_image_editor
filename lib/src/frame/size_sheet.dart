@@ -116,6 +116,11 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
   final _wFocus = FocusNode();
   final _dFocus = FocusNode();
 
+  /// The fields row and the depth chips below it: scrolled into view above
+  /// the keyboard when a field gets focus or the keyboard opens.
+  final _fieldsKey = GlobalKey(debugLabel: 'z_size_fields');
+  double _lastInset = 0;
+
   /// Values filled in by the sheet (shown with ≈, dashed) rather than typed.
   final _estimated = <_Field>{};
   ZCommonSize? _preset;
@@ -148,7 +153,12 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       _estimated.add(_Field.depth);
     }
     for (final f in [_hFocus, _wFocus, _dFocus]) {
-      f.addListener(() => setState(() {}));
+      f.addListener(() {
+        // Only the field's border changes: the widget tree stays the same,
+        // so the focused EditableText is never rebuilt from scratch.
+        setState(() {});
+        if (f.hasFocus) _revealFields();
+      });
     }
   }
 
@@ -163,17 +173,54 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
     super.dispose();
   }
 
+  bool get _anyFocus =>
+      _hFocus.hasFocus || _wFocus.hasFocus || _dFocus.hasFocus;
+
+  /// Scrolls the fields (and the depth chips under them) into view, after
+  /// the frame that resized the sheet for the keyboard.
+  void _revealFields() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _fieldsKey.currentContext;
+      if (!mounted || ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+  }
+
   double? get _height => parseCm(_h.text);
   double? get _width => parseCm(_w.text);
   double get _depth => parseCm(_d.text) ?? ZDepthPreset.defaultCm;
   bool get _valid => _height != null && _width != null;
 
+  /// Common sizes offered for this shape (empty when none matches).
+  List<ZCommonSize> get _presets {
+    final aspect = widget.estimatedAspectHW;
+    return aspect == null || _bestFit == null
+        ? const <ZCommonSize>[]
+        : ZCommonSizes.forAspect(aspect);
+  }
+
+  /// The common size the fields now hold, if any: typing clears the
+  /// selection, typing a common size's numbers selects it.
+  ZCommonSize? _matchingPreset() {
+    final h = _height, w = _width;
+    if (h == null || w == null) return null;
+    for (final p in _presets) {
+      if (p.heightCm == h && p.widthCm == w) return p;
+    }
+    return null;
+  }
+
   void _typed(_Field f, String text) {
     setState(() {
       _estimated.remove(f);
-      _preset = null;
+      _preset = _matchingPreset();
       final aspect = _aspect;
-      if (aspect == null) return;
+      if (aspect == null || f == _Field.depth) return;
       final v = parseCm(text);
       if (f == _Field.height &&
           (_w.text.isEmpty || _estimated.contains(_Field.width))) {
@@ -184,6 +231,7 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
         _h.text = v == null ? '' : '≈ ${formatCm(v * aspect)}';
         if (v != null) _estimated.add(_Field.height);
       }
+      _preset = _matchingPreset();
     });
   }
 
@@ -232,12 +280,15 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    final keyboard = mq.viewInsets.bottom > 0;
+    final inset = mq.viewInsets.bottom;
+    final keyboard = inset > 0;
+    if (inset != _lastInset) {
+      _lastInset = inset;
+      if (keyboard && _anyFocus) _revealFields();
+    }
     final l = widget.labels;
     final aspect = widget.estimatedAspectHW;
-    final presets = aspect == null || _bestFit == null
-        ? const <ZCommonSize>[]
-        : ZCommonSizes.forAspect(aspect);
+    final presets = _presets;
 
     final info = aspect == null
         ? null
@@ -325,6 +376,7 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
           );
 
     final fields = Row(
+      key: _fieldsKey,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(child: _field(_Field.height, l.height, _h, _hFocus)),
@@ -346,27 +398,32 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
         Text('$autoFilled${l.depthHint}',
             style: _text(12, color: t.sheetMutedColor)),
         const SizedBox(height: 4),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final p in ZDepthPreset.all)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _DepthChip(
-                    key: Key('z_size_depth_${p.label}'),
-                    theme: t,
-                    label: '${p.label} ${formatCm(p.cm)}',
-                    selected: parseCm(_d.text) == p.cm,
-                    onTap: () => _pickDepth(p),
-                  ),
-                ),
-            ],
-          ),
+        // All four chips in view (wrapping onto a second line on narrow
+        // phones) rather than a sideways scroll that could hide one or
+        // scroll under the finger. Chip widths do not depend on the
+        // selection, so the wrap never reflows when one is picked.
+        Wrap(
+          key: const Key('z_size_depths'),
+          spacing: 8,
+          children: [
+            for (final p in ZDepthPreset.all)
+              _DepthChip(
+                key: Key('z_size_depth_${p.label}'),
+                theme: t,
+                label: '${p.label} ${formatCm(p.cm)}',
+                selected: parseCm(_d.text) == p.cm,
+                onTap: () => _pickDepth(p),
+              ),
+          ],
         ),
       ],
     );
 
+    // One fixed order, keyboard or not. Moving the fields to another place
+    // in this list when the keyboard opened recreated them: the focused
+    // field was disposed, focus and the keyboard went away, and the sheet
+    // jumped back ("blinks, no keyboard"). With the keyboard up the sheet
+    // only scrolls the fields into view ([_revealFields]).
     final body = <Widget>[
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,45 +432,37 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
             l.title,
             style: TextStyle(
               fontFamily: t.titleFontFamily ?? t.fontFamily,
-              fontSize: keyboard ? 28 : 32,
+              fontSize: 32,
               height: 1,
               color: t.sheetTextColor,
               letterSpacing: 0.6,
               decoration: TextDecoration.none,
             ),
           ),
-          if (!keyboard) ...[
-            const SizedBox(height: 4),
-            Text(l.subtitle, style: _text(14, color: t.sheetMutedColor)),
-          ],
+          const SizedBox(height: 4),
+          Text(l.subtitle, style: _text(14, color: t.sheetMutedColor)),
         ],
       ),
-      if (keyboard) ...[
-        fields,
-        depth,
-        if (grid != null) grid,
-      ] else ...[
-        if (info != null) info,
-        if (grid != null) grid,
-        fields,
-        depth,
-        if (grid != null)
-          Text(l.detailsNote,
-              textAlign: TextAlign.center,
-              style: _text(12, color: t.sheetMutedColor))
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l.howTitle.toUpperCase(),
-                  style: _text(12,
-                          color: t.sheetMutedColor, weight: FontWeight.w500)
-                      .copyWith(letterSpacing: 0.7)),
-              const SizedBox(height: 8),
-              Text(l.howBody, style: _text(13, color: t.sheetMutedColor)),
-            ],
-          ),
-      ],
+      if (info != null) info,
+      if (grid != null) grid,
+      fields,
+      depth,
+      if (grid != null)
+        Text(l.detailsNote,
+            textAlign: TextAlign.center,
+            style: _text(12, color: t.sheetMutedColor))
+      else
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l.howTitle.toUpperCase(),
+                style:
+                    _text(12, color: t.sheetMutedColor, weight: FontWeight.w500)
+                        .copyWith(letterSpacing: 0.7)),
+            const SizedBox(height: 8),
+            Text(l.howBody, style: _text(13, color: t.sheetMutedColor)),
+          ],
+        ),
     ];
 
     return Material(
@@ -572,9 +621,14 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
               onTap: () {
                 if (estimated) {
                   // Start from the number, without the "≈ ".
+                  // One value update (text + caret); the field itself is
+                  // not rebuilt, so it keeps focus.
                   final v = parseCm(c.text);
-                  c.text = v == null ? '' : formatCm(v);
-                  c.selection = TextSelection.collapsed(offset: c.text.length);
+                  final text = v == null ? '' : formatCm(v);
+                  c.value = TextEditingValue(
+                    text: text,
+                    selection: TextSelection.collapsed(offset: text.length),
+                  );
                 }
               },
               onChanged: (v) => _typed(f, v),
@@ -642,12 +696,20 @@ class _PresetButton extends StatelessWidget {
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 4),
+          // A 1 px border in both states; the selected 1.5 px ring is drawn
+          // on top, inside the button, so selecting never moves the label.
           decoration: BoxDecoration(
             color: selected ? t.sheetSelectedFillColor : t.sheetFieldColor,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: selected ? t.sheetAccentColor : t.sheetBorderColor,
-              width: selected ? 1.5 : 1,
+            ),
+          ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: selected ? t.sheetAccentColor : const Color(0x00000000),
+              width: 1.5,
             ),
           ),
           child: FittedBox(
@@ -655,7 +717,7 @@ class _PresetButton extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label,
+                ZSteadyWeightText(label,
                     style: TextStyle(
                       fontFamily: t.fontFamily,
                       fontSize: 14,
@@ -714,10 +776,17 @@ class _DepthChip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(40),
                 border: Border.all(
                   color: selected ? t.sheetAccentColor : t.sheetBorderColor,
-                  width: selected ? 1.5 : 1,
                 ),
               ),
-              child: Text(label,
+              foregroundDecoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(40),
+                border: Border.all(
+                  color:
+                      selected ? t.sheetAccentColor : const Color(0x00000000),
+                  width: 1.5,
+                ),
+              ),
+              child: ZSteadyWeightText(label,
                   style: TextStyle(
                     fontFamily: t.fontFamily,
                     fontSize: 14,

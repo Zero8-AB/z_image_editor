@@ -156,10 +156,15 @@ void main() {
             tester.getCenter(find.byKey(const Key('z_frame_handle_1')));
         expect(top.dx, closeTo(canvas.center.dx, 1));
         expect(right.dy, closeTo(canvas.center.dy, 1));
-        // Wrong? has a 44 px tap target.
+        // Wrong? is inside the label, whose whole 44 px row is the target.
         expect(
-            tester.getSize(find.byKey(const Key('z_frame_shape_wrong'))).height,
+            tester.getSize(find.byKey(const Key('z_frame_shape_label'))).height,
             greaterThanOrEqualTo(44));
+        expect(
+            find.descendant(
+                of: find.byKey(const Key('z_frame_shape_label')),
+                matching: find.byKey(const Key('z_frame_shape_wrong'))),
+            findsOneWidget);
       });
 
       testWidgets('only rectangles: no shape label', (tester) async {

@@ -1431,6 +1431,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
           theme: t,
           icon: ZLineIconKind.crop,
           label: 'Crop',
+          labelLines: 1,
           active: state.currentTab == EditorTab.crop,
           activeColor: t.tabSelectedColor,
           onTap: () => _controller.setTab(EditorTab.crop),
@@ -1441,6 +1442,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
           theme: t,
           icon: ZLineIconKind.adjust,
           label: 'Adjust',
+          labelLines: 1,
           active: state.currentTab == EditorTab.adjust,
           activeColor: t.tabSelectedColor,
           onTap: () {

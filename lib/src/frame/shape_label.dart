@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme/z_image_editor_theme.dart';
 import 'frame_detector.dart';
 
-/// Small pill above the chips: "◯ Round frame found · Wrong?". "Wrong?"
-/// opens [showZFrameShapeMenu]. There are no shape buttons: the shape comes
+/// Small pill above the chips: "◯ Round frame found · Wrong?". A tap
+/// anywhere on it opens [showZFrameShapeMenu] (44 px tall tap area). There are no shape buttons: the shape comes
 /// from the detector and this is only the way to correct it.
 class ZFrameShapeLabel extends StatelessWidget {
   final ZImageEditorTheme theme;
@@ -28,63 +28,65 @@ class ZFrameShapeLabel extends StatelessWidget {
       ZFrameShape.oval => labels.ovalFoundLabel,
       ZFrameShape.rectangle => labels.rectangleShapeLabel,
     };
+    // The whole pill is one button: its text changes with the shape
+    // ("Round frame found" → "Rectangle"), which moved "Wrong?" sideways,
+    // so a second tap where "Wrong?" used to be hit nothing. Any tap on the
+    // pill opens the menu now, on the first tap.
     return Center(
-      child: SizedBox(
-        key: const Key('z_frame_shape_label'),
-        height: 44,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // The 32 px pill; "Wrong?" keeps a 44 px tap target.
-            Positioned.fill(
-              top: 6,
-              bottom: 6,
-              child: DecoratedBox(
+      child: Semantics(
+        button: true,
+        enabled: onWrong != null,
+        label: '$text. ${labels.wrongShapeLabel}',
+        excludeSemantics: true,
+        child: GestureDetector(
+          key: const Key('z_frame_shape_label'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onWrong,
+          child: SizedBox(
+            height: 44,
+            child: Center(
+              child: Container(
+                key: const Key('z_frame_shape_pill'),
+                padding: const EdgeInsets.only(left: 14),
                 decoration: BoxDecoration(
                   color: t.textColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 14),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ZShapeIcon(shape: shape, color: t.toggleOnColor, size: 16),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      text,
-                      key: const Key('z_frame_shape_text'),
-                      overflow: TextOverflow.ellipsis,
-                      style: t.text(fontSize: 14),
-                    ),
-                  ),
-                  Semantics(
-                    button: true,
-                    child: GestureDetector(
-                      key: const Key('z_frame_shape_wrong'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onWrong,
-                      child: Container(
-                        height: 44,
-                        constraints: const BoxConstraints(minWidth: 44),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        alignment: Alignment.center,
-                        child: Text(
-                          labels.wrongShapeLabel,
-                          style: t
-                              .text(color: t.mutedTextColor, fontSize: 13)
-                              .copyWith(decoration: TextDecoration.underline),
-                        ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ZShapeIcon(shape: shape, color: t.toggleOnColor, size: 16),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        text,
+                        key: const Key('z_frame_shape_text'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.text(fontSize: 14),
                       ),
                     ),
-                  ),
-                ],
+                    Container(
+                      key: const Key('z_frame_shape_wrong'),
+                      // The 32 px pill; the 44 px tap area is the whole
+                      // label around it.
+                      height: 32,
+                      constraints: const BoxConstraints(minWidth: 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      alignment: Alignment.center,
+                      child: Text(
+                        labels.wrongShapeLabel,
+                        maxLines: 1,
+                        style: t
+                            .text(color: t.mutedTextColor, fontSize: 13)
+                            .copyWith(decoration: TextDecoration.underline),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

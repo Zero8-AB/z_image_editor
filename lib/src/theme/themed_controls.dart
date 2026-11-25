@@ -286,6 +286,9 @@ class ZToolButton extends StatelessWidget {
   /// Exposes on/off state to accessibility (for toggles).
   final bool? toggled;
 
+  /// Lines reserved for the label, whatever it says now (see [build]).
+  final int labelLines;
+
   const ZToolButton({
     super.key,
     required this.theme,
@@ -295,6 +298,7 @@ class ZToolButton extends StatelessWidget {
     this.active = false,
     this.activeColor,
     this.toggled,
+    this.labelLines = 2,
   });
 
   @override
@@ -304,6 +308,12 @@ class ZToolButton extends StatelessWidget {
         : active
             ? (activeColor ?? theme.toggleOnColor)
             : theme.textColor;
+    final style = theme.text(
+      color: color,
+      fontSize: theme.toolLabelFontSize,
+      letterSpacing: 0.4,
+      fontWeight: active ? FontWeight.w500 : FontWeight.normal,
+    );
     return Semantics(
       button: true,
       toggled: toggled,
@@ -315,31 +325,88 @@ class ZToolButton extends StatelessWidget {
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 64, minHeight: 44),
+          // The icon sits at the same height in every button, and the label
+          // always gets two lines: a one-line and a two-line label ("≈ 50 ×
+          // 50 cm · Check"), or a label that changes, never moves the
+          // icons. A label too large for its room scales down.
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ZLineIcon(icon, color: color, size: theme.toolIconSize),
               const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label.contains(' · ')
-                      ? label.replaceFirst(' · ', '\n· ')
-                      : label,
-                  maxLines: 2,
-                  textAlign: TextAlign.center,
-                  style: theme.text(
-                    color: color,
-                    fontSize: theme.toolLabelFontSize,
-                    letterSpacing: 0.4,
-                    fontWeight: active ? FontWeight.w500 : FontWeight.normal,
+              SizedBox(
+                height: toolLabelHeight(theme, labelLines),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topCenter,
+                  child: ZSteadyWeightText(
+                    label.contains(' · ')
+                        ? label.replaceFirst(' · ', '\n· ')
+                        : label,
+                    style: style,
+                    maxLines: labelLines,
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Room for a [lines]-line label at text scale 1 (a larger text scale
+  /// scales the label down to fit instead of growing the row).
+  static double toolLabelHeight(ZImageEditorTheme theme, int lines) =>
+      (theme.toolLabelFontSize * 1.45 * lines).ceilToDouble();
+}
+
+/// Text whose width does not change between normal and medium weight: it
+/// reserves the wider of the two, so a selected (w500) label never pushes
+/// its neighbours. One [Text] widget, so finders see one label.
+class ZSteadyWeightText extends StatelessWidget {
+  final String data;
+  final TextStyle style;
+  final int? maxLines;
+  final TextAlign textAlign;
+
+  const ZSteadyWeightText(
+    this.data, {
+    super.key,
+    required this.style,
+    this.maxLines,
+    this.textAlign = TextAlign.center,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final base = DefaultTextStyle.of(context).style.merge(style);
+    final scaler = MediaQuery.textScalerOf(context);
+    double widthOf(FontWeight w) {
+      final tp = TextPainter(
+        text: TextSpan(text: data, style: base.copyWith(fontWeight: w)),
+        textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: maxLines,
+        textAlign: textAlign,
+      )..layout();
+      final w0 = tp.width;
+      tp.dispose();
+      return w0;
+    }
+
+    final reserved = math.max(
+      widthOf(FontWeight.normal),
+      widthOf(FontWeight.w500),
+    );
+    return ConstrainedBox(
+      constraints: BoxConstraints(minWidth: reserved.ceilToDouble()),
+      child: Text(
+        data,
+        style: style,
+        maxLines: maxLines,
+        textAlign: textAlign,
       ),
     );
   }
@@ -384,7 +451,8 @@ class ZChip extends StatelessWidget {
                       : theme.chipBorderColor,
                 ),
               ),
-              child: Text(
+              // Same width selected or not: the row never shifts.
+              child: ZSteadyWeightText(
                 label,
                 style: theme.text(
                   color: selected

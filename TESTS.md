@@ -48,6 +48,9 @@ screens: see `TESTS.md` in the Monogram app.
 | 9 | Round = circle (size ≈ 50 × 50, square output) | `round_frame_test` › a round frame is measured as a circle |
 | 9 | Transparent outside / #F5F0F0 for JPEG | `round_frame_test` › geometry group; editor group (PNG / auto … transparent, JPEG … #F5F0F0) |
 | 10 | Safe areas, handles off the edges, text scale 1.3 | `frame/safe_area_test.dart` › frame step: inside the safe area, handles off the edges (6 phones) |
+| 9 | Shape pill and chips never overlap (pill and chips in their own rows, 8 px apart; 360 × 640 … 430 × 932, text scale 1 and 1.3); a tap on the chip under the pill selects it | `frame/frame_bottom_bar_test.dart` › shape pill and chips never overlap ({phone} @ {scale}) |
+| 9 | Wrong? opens the menu on the first tap every time: after a pick, after confirming the size, during the last menu's slide-out; a tap anywhere on the pill opens it | `frame_bottom_bar_test` › Wrong? → pick → Wrong? again opens on the first tap; after confirming the size, Wrong? opens on the first tap; a tap while the last menu still slides away opens it |
+| 2, 3 | Bottom bar never shifts: chips keep their size when selected; tool icons on one line; "≈ 50 × 50 cm · Check" fits in two reserved lines; confirming the size moves no button | `frame_bottom_bar_test` › selecting chips and changing shapes moves no chip or tool; "≈ 50 × 50 cm · Check" fits in two lines; confirming the size moves no other button |
 
 ## Size sheet ("Real size of the artwork")
 
@@ -61,6 +64,9 @@ screens: see `TESTS.md` in the Monogram app.
 | 6 | Confirm text / disabled | `size_sheet_test` › Confirm returns the size; disabled without both sides |
 | 6 | "I don't know…" (keep estimate) | `size_sheet_test` and `frame_size_tools_test` (`z_size_keep`) |
 | 6 | Keyboard state | `size_sheet_test` › keyboard open: Confirm pinned above it…; `safe_area_test` › size sheet: Confirm above the home bar and the keyboard |
+| 6 | Keyboard: tapping Height / Width / Depth keeps focus and the same field while the keyboard opens (no blink); the field scrolls above Confirm, Confirm above the keyboard; typing updates Confirm (3 phones, text scale 1.3, estimated ≈ depth) | `frame/size_sheet_keyboard_test.dart` › keyboard @ {phone} group |
+| 6 | Common sizes and depth chips do not move when one is picked, or when typing clears the pick (button and label rects) | `size_sheet_keyboard_test` › presets stay put group |
+| 6 | Typing clears / re-selects the common size; a preset fills both fields; a typed depth deselects the chip; Confirm reads H × W × D | `size_sheet_keyboard_test` › manual entry and presets group |
 | 6 | Known size, small phone scroll | `size_sheet_test` › known size: fields filled, depth kept; the sheet scrolls on a small phone |
 | 6 | Confirmed size reported | `frame_size_tools_test` › editor reports a confirmed size after Next |
 | 6 | "Estimated shape" is the photo's, not the confirmed size's | `frame_size_tools_test` › the sheet shows the photo’s estimate after a confirm |

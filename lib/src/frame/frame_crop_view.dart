@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
 import 'package:flutter/material.dart' show Material;
 
 import '../theme/themed_controls.dart';
@@ -285,19 +285,30 @@ class _FrameCropViewState extends State<FrameCropView> {
       _shapeOverrides.isNotEmpty ||
       _candidates.any((c) => c.shape != ZFrameShape.rectangle);
 
+  /// Whether the shape menu is up: a second tap while it opens is ignored
+  /// instead of stacking a second menu.
+  bool _shapeMenuOpen = false;
+
   Future<void> _openShapeMenu() async {
-    final picked = await showZFrameShapeMenu(
-      context,
-      theme: _theme,
-      labels: widget.labels,
-      current: _shape,
-    );
+    if (_shapeMenuOpen) return;
+    _shapeMenuOpen = true;
+    ZFrameShape? picked;
+    try {
+      picked = await showZFrameShapeMenu(
+        context,
+        theme: _theme,
+        labels: widget.labels,
+        current: _shape,
+      );
+    } finally {
+      _shapeMenuOpen = false;
+    }
     if (!mounted || picked == null) return;
     setState(() {
       _userTouched = true;
       _shapeOverrides = {
         ..._shapeOverrides,
-        _base ?? _manualShapeKey: picked,
+        _base ?? _manualShapeKey: picked!,
       };
     });
   }
@@ -399,6 +410,28 @@ class _FrameCropViewState extends State<FrameCropView> {
     if (_shape == ZFrameShape.round) return 1;
     final image = _image;
     if (image == null) return null;
+    // Asked several times per build (size label, lines, Next): solve once
+    // per outline, not on every rebuild (keyboard and route animations
+    // rebuild the step every frame).
+    if (identical(image, _estimateImage) &&
+        _turns == _estimateTurns &&
+        listEquals(_corners, _estimateCorners)) {
+      return _estimateValue;
+    }
+    final v = _solveAspectHW(image);
+    _estimateImage = image;
+    _estimateTurns = _turns;
+    _estimateCorners = List.of(_corners);
+    _estimateValue = v;
+    return v;
+  }
+
+  ui.Image? _estimateImage;
+  int _estimateTurns = 0;
+  List<Offset>? _estimateCorners;
+  double? _estimateValue;
+
+  double? _solveAspectHW(ui.Image image) {
     final imgSize = Size(image.width.toDouble(), image.height.toDouble());
     if (!_focalRead) {
       _focalRead = true;
@@ -720,11 +753,14 @@ class _FrameCropViewState extends State<FrameCropView> {
             color: _theme.panelColor,
             padding: EdgeInsets.only(
               top: 4,
-              bottom: 8 + MediaQuery.of(context).padding.bottom,
+              bottom: 8 + MediaQuery.paddingOf(context).bottom,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // The pill and the chips are separate rows of a column with
+                // a fixed gap, each in a box of its own height: they cannot
+                // overlap, whatever the text scale.
                 if (_showShapeLabel && !_detecting) ...[
                   ZFrameShapeLabel(
                     theme: _theme,
@@ -732,7 +768,7 @@ class _FrameCropViewState extends State<FrameCropView> {
                     shape: _shape,
                     onWrong: _applying ? null : _openShapeMenu,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                 ],
                 SizedBox(
                   height: math.max(_theme.chipTapHeight, _theme.chipHeight),
@@ -872,11 +908,8 @@ class _FrameCropViewState extends State<FrameCropView> {
         final pad = _theme.canvasPadding;
         // Corner handles stay out of the system back-swipe areas at the
         // screen's left and right edges (and at least 24 px in).
-        final mq = MediaQuery.of(context);
-        final gesture = math.max(
-          mq.systemGestureInsets.left,
-          mq.systemGestureInsets.right,
-        );
+        final insets = MediaQuery.systemGestureInsetsOf(context);
+        final gesture = math.max(insets.left, insets.right);
         final padX = math.max(pad, math.max(24.0, gesture + 12));
         final area = Size(
           math.max(1, constraints.maxWidth - padX * 2),
@@ -1048,7 +1081,7 @@ class FrameStepHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topPadding = kIsWeb ? 0.0 : MediaQuery.of(context).padding.top;
+    final topPadding = kIsWeb ? 0.0 : MediaQuery.paddingOf(context).top;
     return Container(
       color: theme.panelColor,
       padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 6),
