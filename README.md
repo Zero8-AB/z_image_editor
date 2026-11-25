@@ -378,6 +378,15 @@ ZImageEditor(
 )
 ```
 
+### Tip sheet before the camera
+
+`showZPhotoTipSheet(context, theme: ...)` shows "Photograph your artwork"
+with three tips. It resolves to a `ZPhotoTipResult` when "Take photo" is
+tapped (with `dontShowAgain` if the box was ticked) or to `null` when the
+sheet is dismissed, in which case no photo should be taken. Persisting
+"Don’t show this again" is up to the app. The tips scroll on small phones;
+"Take photo" and the checkbox stay in view above the home indicator.
+
 ### Theme
 
 `ZImageEditorTheme` holds every colour, font and size of the chrome (header

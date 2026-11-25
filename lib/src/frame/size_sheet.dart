@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../theme/themed_controls.dart';
 import '../theme/z_image_editor_theme.dart';
 import 'artwork_size.dart';
+import 'sheet_parts.dart';
 
 /// Texts of the size sheet.
 class ZSizeSheetLabels {
@@ -468,7 +469,7 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _SheetButton(
+                    ZSheetButton(
                       key: const Key('z_size_confirm'),
                       theme: t,
                       label: confirmLabel,
@@ -723,57 +724,6 @@ class _DepthChip extends StatelessWidget {
                     color: t.sheetTextColor,
                     fontWeight: selected ? FontWeight.w500 : FontWeight.normal,
                   )),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetButton extends StatelessWidget {
-  final ZImageEditorTheme theme;
-  final String label;
-  final VoidCallback? onTap;
-
-  const _SheetButton({
-    super.key,
-    required this.theme,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      enabled: onTap != null,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Opacity(
-          opacity: onTap == null ? 0.5 : 1,
-          child: Container(
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: theme.sheetAccentColor,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: theme.fontFamily,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
-                    color: theme.primaryButtonTextColor,
-                  ),
-                ),
-              ),
             ),
           ),
         ),

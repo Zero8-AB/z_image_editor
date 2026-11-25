@@ -10,6 +10,7 @@ export 'src/frame/quad_math.dart';
 export 'src/frame/rect_aspect.dart';
 export 'src/frame/artwork_size.dart';
 export 'src/frame/size_sheet.dart';
+export 'src/frame/tip_sheet.dart';
 export 'src/frame/perspective_warp.dart';
 
 // Models (for advanced usage)
