@@ -20,6 +20,9 @@ enum ZLineIconKind {
 
   /// Size confirmed or measured: rectangle with a lock.
   sizeConfirmed,
+
+  /// Retake the photo: a camera.
+  camera,
   close,
   check,
   auto,
@@ -173,6 +176,21 @@ class _LineIconPainter extends CustomPainter {
             ..lineTo(14, 10),
           p,
         );
+      case ZLineIconKind.camera:
+        canvas.drawPath(
+          Path()
+            ..moveTo(3, 8)
+            ..lineTo(7, 8)
+            ..lineTo(9, 5)
+            ..lineTo(15, 5)
+            ..lineTo(17, 8)
+            ..lineTo(21, 8)
+            ..lineTo(21, 19)
+            ..lineTo(3, 19)
+            ..close(),
+          p,
+        );
+        canvas.drawCircle(const Offset(12, 13), 3.5, p);
       case ZLineIconKind.close:
         line(6, 6, 18, 18);
         line(18, 6, 6, 18);
