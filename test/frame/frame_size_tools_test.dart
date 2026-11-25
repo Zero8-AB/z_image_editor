@@ -302,6 +302,32 @@ void main() {
     expect(shown, [const ZArtworkSize(heightCm: 40, widthCm: 30, depthCm: 2)]);
   });
 
+  testWidgets('reopen → Next reports the shown size again', (tester) async {
+    final shown = <ZArtworkSize>[];
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageBytesList: [testPng(w: 300, h: 400)],
+        frameDetector: FakeDetector([rect('With frame', 0.1)]),
+        enableSizeTools: true,
+        theme: sizeTheme,
+        onArtworkSize: shown.add,
+        onSaveAll: (_) {},
+        onCancel: () {},
+      ),
+    );
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    // ‹ Frame, then Next again without changes.
+    await tester.tap(find.byKey(const Key('z_editor_cancel')));
+    await settleAsync(tester);
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    const estimate =
+        ZArtworkSize(heightCm: 40, widthCm: 30, source: ZSizeSource.estimated);
+    expect(shown, [estimate, estimate]);
+  });
+
   testWidgets('without sizeTools no size is reported', (tester) async {
     final shown = <ZArtworkSize>[];
     await pumpEditor(

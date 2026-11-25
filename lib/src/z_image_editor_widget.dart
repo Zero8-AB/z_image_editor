@@ -142,7 +142,8 @@ class ZImageEditor extends StatefulWidget {
   /// its source: exact (details, measured, confirmed) or the "≈" estimate
   /// ([ZSizeSource.estimated], no depth). E.g. to fill a form's empty size
   /// fields. Not called when no size is shown (size tools off, or nothing to
-  /// estimate from).
+  /// estimate from). Called on every Next (also after reopening the frame
+  /// step and once per image), so treat it as idempotent.
   final ValueChanged<ZArtworkSize>? onArtworkSize;
 
   /// Called on Next in the frame step with what the step saw in the photo
@@ -160,8 +161,9 @@ class ZImageEditor extends StatefulWidget {
   /// Texts of the photo hints.
   final ZPhotoHintLabels photoHintLabels;
 
-  /// "Retake" in a photo hint: the app closes the editor and takes a new
-  /// photo. Null hides Retake (Use anyway and the cross remain).
+  /// "Retake" in a photo hint and in the frame step's tool row: the app
+  /// closes the editor and takes a new photo. Null hides both (Use anyway
+  /// and the cross remain in a hint).
   final VoidCallback? onRetake;
 
   /// Offer "Auto" (black/white stretch, white balance from the white mat,
