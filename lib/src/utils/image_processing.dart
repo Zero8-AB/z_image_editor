@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:z_image_editor/src/frame/perspective_warp.dart';
 import 'package:z_image_editor/src/models/image_editor_state.dart';
 import 'package:z_image_editor/src/models/image_output_format.dart';
 import 'package:z_image_editor/src/utils/transformation_service.dart';
@@ -190,13 +191,12 @@ class ImageProcessing {
 
     // Color adjustments via paint colorFilter (matches live preview exactly).
     final paint = Paint()..filterQuality = FilterQuality.high;
-    if (state.brightness != 0 ||
-        state.contrast != 1.0 ||
-        state.saturation != 1.0) {
+    if (state.hasColorChanges) {
       paint.colorFilter = ColorFilterMatrix.combined(
         brightness: state.brightness,
         contrast: state.contrast,
         saturation: state.saturation,
+        auto: state.autoLevels,
       );
     }
 
@@ -305,14 +305,38 @@ class ImageProcessing {
     );
   }
 
+  /// Decodes [bytes] for the pixel-based fallbacks: the `image` package
+  /// where it can, else the engine codec (HEIC/HEIF, AVIF, …).
+  static Future<img.Image> _decodeCpu(Uint8List bytes) async {
+    final dartFirst = ZPerspectiveWarp.decodesInDart(bytes);
+    if (dartFirst) {
+      final decoded = img.decodeImage(bytes);
+      if (decoded != null) return decoded;
+    }
+    try {
+      final px = await ZPerspectiveWarp.decodeWithEngine(bytes);
+      return img.Image.fromBytes(
+        width: px.width,
+        height: px.height,
+        bytes: px.rgba.buffer,
+        bytesOffset: px.rgba.offsetInBytes,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      );
+    } catch (_) {
+      final decoded = dartFirst ? null : img.decodeImage(bytes);
+      if (decoded != null) return decoded;
+      throw Exception('Failed to decode image');
+    }
+  }
+
   /// Pixel-based fallback for [processImageToBytes] (no displaySize).
   static Future<Uint8List> _processImageFallbackToBytes({
     required Uint8List bytes,
     required ImageEditorState state,
     ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
-    img.Image? image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode image');
+    var image = await _decodeCpu(bytes);
 
     final totalRotation = state.totalRotation;
     if (totalRotation != 0) {
@@ -331,6 +355,7 @@ class ImageProcessing {
       brightness: state.brightness,
       contrast: state.contrast,
       saturation: state.saturation,
+      auto: state.autoLevels,
     );
 
     if (outputFormat == ImageOutputFormat.jpeg) {
@@ -348,8 +373,7 @@ class ImageProcessing {
     required ImageEditorState state,
     ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
-    img.Image? image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode image');
+    var image = await _decodeCpu(bytes);
 
     // Rotation first, then crop (correct order).
     final totalRotation = state.totalRotation;
@@ -372,6 +396,7 @@ class ImageProcessing {
       brightness: state.brightness,
       contrast: state.contrast,
       saturation: state.saturation,
+      auto: state.autoLevels,
     );
 
     final tempDir = Directory.systemTemp;
@@ -450,21 +475,35 @@ class ImageProcessing {
     }
   }
 
+  /// Applies brightness/contrast/saturation with exactly the colour matrix
+  /// the live preview and the WYSIWYG export use ([ColorFilterMatrix]), so
+  /// the pixel fallback looks the same. (`img.adjustColor` treats brightness
+  /// as a multiplier, which turned +50 white and -50 black.)
   static img.Image _applyColorAdjustments(
     img.Image image, {
     required double brightness,
     required double contrast,
     required double saturation,
+    List<double>? auto,
   }) {
-    if (brightness != 0) {
-      final brightnessValue = (brightness * 2.55).toInt();
-      image = img.adjustColor(image, brightness: brightnessValue);
+    if (auto == null &&
+        brightness == 0 &&
+        contrast == 1.0 &&
+        saturation == 1.0) {
+      return image;
     }
-    if (contrast != 1.0) {
-      image = img.adjustColor(image, contrast: contrast);
-    }
-    if (saturation != 1.0) {
-      image = img.adjustColor(image, saturation: saturation);
+    final m = ColorFilterMatrix.combinedMatrix(
+      brightness: brightness,
+      contrast: contrast,
+      saturation: saturation,
+      auto: auto,
+    );
+    for (final p in image) {
+      final r = p.r.toDouble(), g = p.g.toDouble(), b = p.b.toDouble();
+      p
+        ..r = (m[0] * r + m[1] * g + m[2] * b + m[4]).clamp(0, 255).round()
+        ..g = (m[5] * r + m[6] * g + m[7] * b + m[9]).clamp(0, 255).round()
+        ..b = (m[10] * r + m[11] * g + m[12] * b + m[14]).clamp(0, 255).round();
     }
     return image;
   }
@@ -583,7 +622,43 @@ class ColorFilterMatrix {
     required double brightness,
     required double contrast,
     required double saturation,
+    List<double>? auto,
+  }) =>
+      ColorFilter.matrix(combinedMatrix(
+        brightness: brightness,
+        contrast: contrast,
+        saturation: saturation,
+        auto: auto,
+      ));
+
+  /// The 4x5 row-major matrix behind [combined]. [auto] (R, G, B gains then
+  /// offsets) is applied first.
+  static List<double> combinedMatrix({
+    required double brightness,
+    required double contrast,
+    required double saturation,
+    List<double>? auto,
   }) {
+    final m = _userMatrix(brightness, contrast, saturation);
+    if (auto == null) return m;
+    // M · (diag(g) x + o) = (M · diag(g)) x + (M · o + t)
+    final out = List<double>.of(m);
+    for (var row = 0; row < 4; row++) {
+      var t = m[row * 5 + 4];
+      for (var c = 0; c < 3; c++) {
+        out[row * 5 + c] = m[row * 5 + c] * auto[c];
+        t += m[row * 5 + c] * auto[3 + c];
+      }
+      out[row * 5 + 4] = t;
+    }
+    return out;
+  }
+
+  static List<double> _userMatrix(
+    double brightness,
+    double contrast,
+    double saturation,
+  ) {
     // Combine all filters
     final b = brightness / 100;
     final c = contrast;
@@ -596,7 +671,7 @@ class ColorFilterMatrix {
 
     final t = (1.0 - c) / 2.0 * 255 + b * 255;
 
-    return ColorFilter.matrix([
+    return [
       (R + s) * c,
       G * c,
       B * c,
@@ -617,6 +692,6 @@ class ColorFilterMatrix {
       0,
       1,
       0,
-    ]);
+    ];
   }
 }

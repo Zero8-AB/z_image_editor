@@ -10,6 +10,9 @@
 - Adjust brightness, contrast, and saturation
 - Perspective tilt (vertical and horizontal)
 - Optional magnifying glass on crop handle drag
+- Optional perspective **frame step**: pick a four-corner outline (e.g. a framed painting) from detector suggestions or drag the corners, then continue editing the straightened image
+- Optional one-tap enhancer toggle (e.g. reflection removal) in the frame step
+- Themeable chrome (`ZImageEditorTheme`)
 - Multi-image editing (step through a batch in one session)
 - Scroll-to-zoom on desktop/web (mouse wheel and trackpad)
 - Web UI: centered floating panel, or full-screen — your choice
@@ -209,6 +212,16 @@ if (!kIsWeb) {
 
 All parameters are optional beyond the platform-appropriate image input and save callback.
 
+### Output files (mobile)
+
+`onSaveAll` always receives **new temp files**, never the `File` objects you
+passed in, so you can delete or move them freely. With
+`ImageOutputFormat.auto` / `original` and no edits, the file is a
+byte-identical copy of the input, named after its real format from the magic
+bytes (`.jpg`, `.png`, `.webp`, `.heic`, `.gif`, …; the input name's
+extension when the format is unknown). Edited images are re-encoded (`.png`
+or `.jpg`).
+
 ### Button labels
 
 Localise or customise the header buttons:
@@ -280,6 +293,184 @@ ZImageEditor(
 ```
 
 When only one tab is enabled the tab bar is hidden automatically.
+
+### Frame step (perspective crop)
+
+Pass a `ZFrameDetector` and the editor opens in a "choose the frame" step
+first: the photo with four draggable corners (with a magnifier), up to three
+suggested outlines as chips, and tools for Rotate, Full photo and Reset.
+"Next" straightens the chosen quad at full resolution (pure Dart, background
+isolate on native) and continues in the regular crop/adjust editor. The
+editor header then shows "‹ Frame" to go back.
+
+The package ships **no detector** (it stays free of native dependencies);
+implement the interface in your app, for example with OpenCV:
+
+```dart
+class MyDetector extends ZFrameDetector {
+  @override
+  Future<List<ZFrameCandidate>> detect(Uint8List imageBytes) async => [
+        ZFrameCandidate(
+          // Normalized 0..1, EXIF orientation applied: TL, TR, BR, BL.
+          corners: const [Offset(.1, .1), Offset(.9, .1), Offset(.9, .9), Offset(.1, .9)],
+          label: 'With frame',
+          score: 0.9,
+        ),
+      ];
+}
+
+ZImageEditor(
+  imageBytesList: [bytes],
+  frameDetector: MyDetector(),      // opens in the frame step
+  imageEnhancer: MyGlareRemover(),  // optional toggle, on by default
+  frameCropLabels: const ZFrameCropLabels(title: 'Choose the frame'),
+  onSaveAll: ...,
+  onCancel: ...,
+)
+```
+
+- Candidates are shown in the order returned (max. 3). The one with
+  `preselected: true` (else the first) is selected at start and by Reset. Tapping the photo cycles through them and the full photo.
+- Errors or an empty list fall back to dragging the corners by hand.
+- `startWithFrameCrop: true` shows the step without a detector (manual
+  corners); `false` hides it even with a detector. Without either, the editor
+  behaves exactly as before.
+- `ZImageEnhancer.apply` returns the fixed image or `null` ("nothing to fix",
+  toggle hidden). Its output must keep the input's displayed orientation and
+  aspect ratio.
+- The straightened image is capped at 6000 px on its long side
+  (`ZPerspectiveWarp.defaultMaxOutputSide`); larger sources are scaled down
+  before the warp to bound memory. Palette/indexed and 1-bit images work.
+- "Next" is disabled (with a spinner) while the detector or the enhancer is
+  still running.
+- Going back to the frame step and pressing Next without changing the outline
+  keeps the editor's crop/adjust edits; a new outline keeps the colour
+  adjustments only.
+- Web: works (the warp is pure Dart); pass no native detector there.
+- `ZQuadMath` and `ZPerspectiveWarp` are exported for detectors and tests.
+
+### Artwork size and the right shape
+
+With `enableSizeTools: true` the frame step shows a **Size** tool first in
+the tool row, red measurement lines next to the outline
+(`ZImageEditorTheme.showMeasurements`) and a "Real size of the artwork"
+sheet (height × width × depth, common sizes, depth quick picks).
+
+- The straightened image keeps the artwork's **real shape**: from an exact
+  size (`artworkSize`, e.g. from the artwork details, or one the user
+  confirms), else estimated from the outline's perspective
+  (`ZRectAspect`, Zhang–He; focal length from EXIF
+  `FocalLengthIn35mmFilm`, else solved from the outline, else a 26 mm
+  phone lens), else from the average side lengths.
+- Estimates show "≈" ("≈ 50 × 40 cm · Check", "≈ 50 cm"): the best-fitting
+  common size (40×30, 50×40, 70×50, 100×70, A3, A4; landscape versions
+  for wide art) when its shape matches within 5 %. Exact sizes show
+  without "≈" and a lock icon.
+- `onArtworkSizeConfirmed` reports a size the user confirmed (after Next).
+- The sheet's fields, common sizes and depth chips take their colours from
+  `ZImageEditorTheme.size*` (`sizeFieldColor`, `sizeFieldTextColor`,
+  `sizeFieldFocusColor`, `sizeFieldEstimatedColor`, `sizeLabelColor`,
+  `sizeHelperColor`, `sizeOption*`); fields are 48 px with a constant 2 px
+  border (solid when focused, dashed for an estimate), buttons 48 px.
+- `onFrameEvidence` reports what the frame step saw on Next
+  (`ZFrameEvidence`: `hasFrame`, `hasMat`, `glassReflections`, `shape`),
+  e.g. to suggest the artwork's medium. It comes from the detector's levels
+  (`ZFrameCandidate.level`, `matAround`) and the reflection fix / glare hint.
+
+```dart
+ZImageEditor(
+  enableSizeTools: true,
+  artworkSize: const ZArtworkSize(
+      heightCm: 50, widthCm: 40, depthCm: 2, source: ZSizeSource.details),
+  onArtworkSizeConfirmed: (size) => saveToForm(size),
+  ...
+)
+```
+
+### Photo hints
+
+Pass `photoChecker: const ZPhotoQuality()` to check the photo in the frame
+step. At most one banner is shown (in this order): a strong reflection on
+the glass, part of the frame outside the photo, too dark, blurry. "Retake"
+appears when `onRetake` is set (the app closes the editor and opens the
+camera again); "Use anyway" and the cross close the banner. Nothing is ever
+blocked. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
+`ZPhotoChecker` for your own checks.
+
+### Safe areas
+
+Pass `edgeToEdge: true` to draw under transparent system bars (light
+icons, `SystemUiMode.edgeToEdge`); the controls use the real
+`MediaQuery` padding, and in the themed look (or edge to edge) the header
+buttons always sit below the status bar / Dynamic Island. Frame and crop
+handles keep at least 24 px (or the system back-swipe inset + 12 px) from
+the left and right edges. The editor locks to portrait while open and
+restores `orientationsAfterClose` (default: all) when it closes. All sheets
+use `isScrollControlled` and `useSafeArea`. Tested at 360 × 640 (24/48
+insets, and with gesture insets), 375 × 667, 393 × 852 (59/34), 412 × 915
+(3-button, 48) and 430 × 932, all at text scale 1.3.
+
+### Round and oval frames
+
+A detector can mark an outline as round or oval
+(`ZFrameCandidate(shape: ZFrameShape.round, corners: ...)`); the corners
+are then the four corners of the quad the ellipse is inscribed in (it
+touches each side at its middle, through the same perspective). The frame
+step draws the ellipse with four handles on its sides (dragging one moves
+that side) and shows "◯ Round frame found · Wrong?" above the chips while
+any outline is round or oval. A tap on that label ("Wrong?" or its text)
+opens a Rectangle / Round / Oval menu for the current outline; there are
+no shape buttons. Each outline
+keeps its own shape (a round mat opening inside a rectangular frame is
+fine). On Next a round outline is rectified to a circle (square output),
+an oval keeps its measured shape, and outside the ellipse is transparent
+(PNG), or `roundFrameFill` (#F5F0F0) when `outputFormat` is JPEG.
+
+### Auto colour fix
+
+With the themed look (`theme.toolRowTabs`), `enableAutoFix: true` puts an
+"Auto" chip first in the Adjust tab. The photo is analysed at 256 px
+(`ZAutoLevels`): per-channel black/white point stretch (0.5 % clipped,
+gain ≤ 2.5), white balance from the brightest near-neutral area (the white
+mat or paper, ±15 %) and a mild contrast boost (×1.06). Auto turns itself
+on when the photo looks hazy (lifted blacks with a short tonal range, or a
+visibly tinted mat) and stays off once the user turns it off. While Auto is
+selected a Before/After line can be dragged across the photo. The fix is a
+colour matrix, so the preview and the export match (WYSIWYG). Texts:
+`autoFixLabels` (`ZAutoFixLabels`).
+
+### Tip sheet before the camera
+
+`showZPhotoTipSheet(context, theme: ...)` shows "Photograph your artwork"
+with three tips. It resolves to a `ZPhotoTipResult` when "Take photo" is
+tapped (with `dontShowAgain` if the box was ticked) or to `null` when the
+sheet is dismissed, in which case no photo should be taken. Persisting
+"Don’t show this again" is up to the app. The tips scroll on small phones;
+"Take photo" and the checkbox stay in view above the home indicator.
+
+### Theme
+
+`ZImageEditorTheme` holds every colour, font and size of the chrome (header
+buttons, chips, tool rows, tabs) and of the frame step (outline, handles,
+magnifier). The default reproduces the original iOS-style look; set
+`toolRowTabs: true` and `showTitle: true` for a flat tool-row layout.
+
+```dart
+ZImageEditor(
+  theme: const ZImageEditorTheme(
+    backgroundColor: Color(0xFF1C1A1A),
+    accentColor: Color(0xFFCE5151),
+    primaryButtonColor: Color(0xFFCE5151),
+    primaryButtonRadius: 4,
+    primaryButtonHeight: 36,
+    cancelButtonColor: null, // text button
+    fontFamily: 'Jost',
+    showTitle: true,
+    toolRowTabs: true,
+  ),
+  ...
+)
+```
 
 ## Local Quality Checks
 

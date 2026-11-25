@@ -12,7 +12,14 @@ class EditorRulerPainter extends CustomPainter {
   final double angle;
   final double maxRange;
 
-  const EditorRulerPainter({required this.angle, this.maxRange = 45.0});
+  /// Colour of the centre marker.
+  final Color accentColor;
+
+  const EditorRulerPainter({
+    required this.angle,
+    this.maxRange = 45.0,
+    this.accentColor = const Color(0xFFFFCC00),
+  });
 
   /// How many logical pixels correspond to one degree of ruler travel.
   /// Callers must use this constant in their drag-delta calculations.
@@ -34,7 +41,7 @@ class EditorRulerPainter extends CustomPainter {
       ..strokeWidth = 1.3
       ..strokeCap = StrokeCap.round;
     final centrePaint = Paint()
-      ..color = const Color(0xFFFFCC00)
+      ..color = accentColor
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
 

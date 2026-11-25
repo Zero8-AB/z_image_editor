@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:io'
     if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
 import 'dart:typed_data';
@@ -28,6 +29,11 @@ class ImageEditorState {
   final double
       tiltVertical; // keystone tilt −30…+30 (positive = bottom recedes)
 
+  /// "Auto" colour fix as 6 numbers (R, G, B gains then offsets; see
+  /// `ZAutoLevels`), applied before brightness/contrast/saturation. Null =
+  /// off.
+  final List<double>? autoLevels;
+
   const ImageEditorState({
     this.imageFile,
     this.imageBytes,
@@ -48,6 +54,7 @@ class ImageEditorState {
     this.aspectRatioPreset = AspectRatioPreset.free,
     this.tiltHorizontal = 0.0,
     this.tiltVertical = 0.0,
+    this.autoLevels,
   });
 
   ImageEditorState copyWith({
@@ -71,6 +78,8 @@ class ImageEditorState {
     AspectRatioPreset? aspectRatioPreset,
     double? tiltHorizontal,
     double? tiltVertical,
+    List<double>? autoLevels,
+    bool clearAutoLevels = false,
   }) {
     return ImageEditorState(
       imageFile: imageFile ?? this.imageFile,
@@ -92,10 +101,19 @@ class ImageEditorState {
       aspectRatioPreset: aspectRatioPreset ?? this.aspectRatioPreset,
       tiltHorizontal: tiltHorizontal ?? this.tiltHorizontal,
       tiltVertical: tiltVertical ?? this.tiltVertical,
+      autoLevels: clearAutoLevels ? null : (autoLevels ?? this.autoLevels),
     );
   }
 
+  /// Whether any colour change applies (Auto or the sliders).
+  bool get hasColorChanges =>
+      autoLevels != null ||
+      brightness != 0.0 ||
+      contrast != 1.0 ||
+      saturation != 1.0;
+
   bool get hasChanges =>
+      autoLevels != null ||
       brightness != 0.0 ||
       contrast != 1.0 ||
       saturation != 1.0 ||
@@ -105,9 +123,29 @@ class ImageEditorState {
       tiltVertical != 0.0 ||
       flipHorizontal ||
       flipVertical ||
-      cropRect != null ||
+      !_cropIsWholeImage ||
       scale != 1.0 ||
       panOffset != Offset.zero;
+
+  /// Whether [cropRect] is unset or just the initial fitted-image rect (what
+  /// the controller sets on load / reset), which is not an edit.
+  bool get _cropIsWholeImage {
+    final crop = cropRect;
+    if (crop == null) return true;
+    final img = imageSize;
+    final vp = displaySize;
+    if (img == null || vp == null || img.isEmpty || vp.isEmpty) return false;
+    final fit = math.min(vp.width / img.width, vp.height / img.height);
+    final fitW = img.width * fit;
+    final fitH = img.height * fit;
+    // Half a viewport pixel of tolerance.
+    final tx = 0.5 / vp.width;
+    final ty = 0.5 / vp.height;
+    return (crop.left - (vp.width - fitW) / 2 / vp.width).abs() <= tx &&
+        (crop.top - (vp.height - fitH) / 2 / vp.height).abs() <= ty &&
+        (crop.width - fitW / vp.width).abs() <= tx &&
+        (crop.height - fitH / vp.height).abs() <= ty;
+  }
 
   /// Get the total rotation angle in degrees
   double get totalRotation => rotation + fineRotation;

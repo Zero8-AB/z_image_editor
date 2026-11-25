@@ -43,11 +43,7 @@ class ImageEditorController extends ChangeNotifier {
     _redoStack.add(_state);
     // Preserve UI-only fields so undo never switches tabs or changes layout.
     final restored = _undoStack.removeLast();
-    _updateState(restored.copyWith(
-      currentTab: _state.currentTab,
-      displaySize: _state.displaySize,
-      imageSize: _state.imageSize,
-    ));
+    _updateState(_restoreForCurrentViewport(restored));
   }
 
   /// Redo the last undone action.
@@ -55,11 +51,31 @@ class ImageEditorController extends ChangeNotifier {
     if (_redoStack.isEmpty) return;
     _undoStack.add(_state);
     final restored = _redoStack.removeLast();
-    _updateState(restored.copyWith(
+    _updateState(_restoreForCurrentViewport(restored));
+  }
+
+  /// Restores a history entry with today's UI fields. A crop rect saved
+  /// under a different viewport size is mapped to the current one.
+  ImageEditorState _restoreForCurrentViewport(ImageEditorState restored) {
+    final from = restored.displaySize;
+    final to = _state.displaySize;
+    final img = _state.imageSize ?? restored.imageSize;
+    final crop = restored.cropRect;
+    CropRect? mapped;
+    if (crop != null &&
+        from != null &&
+        to != null &&
+        img != null &&
+        from != to) {
+      mapped = _remapCropForViewport(crop, from, to, img, restored.panOffset);
+      transformationService.clearCache();
+    }
+    return restored.copyWith(
       currentTab: _state.currentTab,
       displaySize: _state.displaySize,
       imageSize: _state.imageSize,
-    ));
+      cropRect: mapped,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -170,6 +186,15 @@ class ImageEditorController extends ChangeNotifier {
 
   void setSaturation(double value) {
     _updateState(_state.copyWith(saturation: value));
+  }
+
+  /// Turns the "Auto" colour fix on ([levels], see `ZAutoLevels.values`) or
+  /// off (null). [undoable] false for the automatic first setting.
+  void setAutoLevels(List<double>? levels, {bool undoable = true}) {
+    if (undoable) _pushHistory();
+    _updateState(levels == null
+        ? _state.copyWith(clearAutoLevels: true)
+        : _state.copyWith(autoLevels: List.unmodifiable(levels)));
   }
 
   // Rotation controls
@@ -473,10 +498,58 @@ class ImageEditorController extends ChangeNotifier {
   }
 
   void setDisplaySize(Size size) {
-    final updated = _state.copyWith(displaySize: size);
+    final old = _state.displaySize;
+    final crop = _state.cropRect;
+    final imgSize = _state.imageSize;
+    var updated = _state.copyWith(displaySize: size);
+    // The crop rect is stored in viewport fractions. When the canvas changes
+    // size (e.g. the header toolbar or the aspect-ratio strip changes height
+    // between tabs) re-map it so it stays on the same part of the image;
+    // otherwise it drifts onto the letterbox or off the chosen area.
+    if (old != null && old != size && crop != null && imgSize != null) {
+      updated = updated.copyWith(
+        cropRect:
+            _remapCropForViewport(crop, old, size, imgSize, _state.panOffset),
+      );
+      transformationService.clearCache();
+    }
     _state = updated;
     _maybeInitCropRect();
     notifyListeners();
+  }
+
+  /// Maps [crop] from viewport [from] to viewport [to] so it covers the same
+  /// image pixels. The image is drawn BoxFit.contain around the viewport
+  /// centre and pan is in pixels, so a viewport change is a uniform scale by
+  /// fitScale(to) / fitScale(from) about the panned image centre (pan stays in pixels).
+  static CropRect _remapCropForViewport(
+    CropRect crop,
+    Size from,
+    Size to,
+    Size imageSize,
+    Offset pan,
+  ) {
+    final fitFrom =
+        math.min(from.width / imageSize.width, from.height / imageSize.height);
+    final fitTo =
+        math.min(to.width / imageSize.width, to.height / imageSize.height);
+    final k = fitTo / fitFrom;
+    double mapX(double fx) =>
+        to.width / 2 + pan.dx + (fx * from.width - from.width / 2 - pan.dx) * k;
+    double mapY(double fy) =>
+        to.height / 2 +
+        pan.dy +
+        (fy * from.height - from.height / 2 - pan.dy) * k;
+    final left = mapX(crop.left);
+    final top = mapY(crop.top);
+    final right = mapX(crop.left + crop.width);
+    final bottom = mapY(crop.top + crop.height);
+    return CropRect(
+      left: left / to.width,
+      top: top / to.height,
+      width: (right - left) / to.width,
+      height: (bottom - top) / to.height,
+    );
   }
 
   void setImageSize(Size size) {

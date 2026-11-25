@@ -15,6 +15,8 @@
 11. [Gesture System](#11-gesture-system)
 12. [Visual Overlay Behaviour](#12-visual-overlay-behaviour)
 13. [Data Flow Diagram](#13-data-flow-diagram)
+14. [Frame Step (Perspective Crop)](#14-frame-step-perspective-crop)
+15. [Theme](#15-theme)
 
 ---
 
@@ -60,6 +62,18 @@ lib/
     │   └── image_editor_state.dart      — immutable state: all fields + enums + CropRect
     ├── controller/
     │   └── image_editor_controller.dart — ChangeNotifier; owns & mutates state, animations
+    ├── frame/
+    │   ├── frame_detector.dart          — ZFrameDetector / ZFrameCandidate / ZImageEnhancer / ZFrameCropLabels
+    │   ├── quad_math.dart               — ZQuadMath: ordering, convexity, homography, quarter turns
+    │   ├── perspective_warp.dart        — ZPerspectiveWarp: full-resolution rectification (pure Dart)
+    │   ├── rect_aspect.dart             — ZRectAspect: real W:H of a photographed rectangle (Zhang–He)
+    │   ├── artwork_size.dart            — ZArtworkSize, common sizes, best fit, depth presets
+    │   ├── size_sheet.dart              — "Real size of the artwork" sheet
+    │   ├── measurement_lines.dart       — red size lines next to the outline
+    │   └── frame_crop_view.dart         — the frame step UI (FrameCropView + small presentational widgets)
+    ├── theme/
+    │   ├── z_image_editor_theme.dart    — ZImageEditorTheme: all chrome colours/fonts/sizes
+    │   └── themed_controls.dart         — ZLineIcon, ZToolButton, ZChip, ZPrimaryButton, ZSecondaryButton
     ├── utils/
     │   ├── transformation_service.dart  — all coordinate math (raycasting, clamp, coord conversion)
     │   └── image_processing.dart       — WYSIWYG export renderer + color matrix builder
@@ -413,3 +427,163 @@ CropOverlay.build() → CropOverlayPainter → draws dark overlay + white border
                      ▼
                    Reconstruct Matrix4 → ui.Canvas → PNG → File → onSave()
 ```
+
+---
+
+## 14. Frame Step (Perspective Crop)
+
+Optional first step, shown when `frameDetector` is set or
+`startWithFrameCrop: true`. Without either, nothing in this section runs.
+
+```
+ZImageEditor (_inFrameStep)
+   └── FrameCropView(imageBytes, detector, enhancer, previous)
+         ├── decode display copy (≤ 2048 px)        ui.instantiateImageCodecWithSize
+         ├── detector.detect(bytes)  → ≤ 3 candidates (invalid quads dropped)
+         ├── enhancer.apply(bytes)   → fixed bytes | null (toggle hidden)
+         └── Next → ZPerspectiveWarp.warpBytes(active bytes, corners)
+                     (image package; HEIC etc.: engine decode → RGBA warp)
+                     → FrameCropResult(outputBytes, corners, turns, …)
+ZImageEditor._onFrameContinue
+   └── _frameOutputs[index] = outputBytes → controller.initialize(imageBytes: …)
+```
+
+* **Coordinates.** Candidates are normalized (0..1) in the EXIF-oriented
+  image, TL/TR/BR/BL. The step keeps its outline in the *turned* view
+  (Rotate = quarter turns clockwise); on Next the corners are mapped back with
+  `ZQuadMath.unrotatePoint`, keeping screen order, so the warp also applies
+  the turn.
+* **Warp.** `ZQuadMath.squareToQuad` builds the projective map from the
+  output rectangle to the source quad (Heckbert); every output pixel is
+  bilinearly sampled through it, so straight lines stay straight and
+  foreshortening is corrected. Output size is the longer of each pair of
+  opposite edges (`warpOutputSize`). JPEG q95 (PNG when the source has
+  alpha). Runs in `compute` (an isolate on native, inline on web).
+* **Editing.** Dragging keeps the quad convex, clockwise and ≥ 0.25 % of the
+  image; the chip shows "· edited". Reset returns to the first candidate and
+  no turn; Full photo selects the whole image.
+* **Back to frame.** The editor header shows "‹ Frame" instead of Cancel; it
+  reopens the step with the previous `FrameCropResult` (no re-detection).
+  Cancel in a reopened step returns to the editor unchanged; Next replaces the
+  image and resets the editor's own edits.
+* **Output.** "Full photo" without turn/enhancement leaves the original
+  image untouched (so `ImageOutputFormat.auto` can still skip re-encoding).
+
+## 15. Theme
+
+`ZImageEditorTheme` is the single source of colours, fonts and sizes for the
+header buttons (`ZPrimaryButton`, `ZSecondaryButton`), chips (`ZChip`),
+tool rows (`ZToolButton` + `ZLineIcon`), tabs and the frame step painters.
+The default constructor reproduces the original look. Layout code never
+hard-codes a colour, so a new visual design is a new theme object.
+
+## 16. Artwork Size and Shape
+
+`FrameCropView` keeps an exact size (`_size`: details, measured or
+confirmed) or derives an estimate:
+
+```
+aspect H:W = exact size ?? 1 / ZRectAspect.widthOverHeight(quad px, image, focal)
+                        ?? side averages
+shown size = exact ?? ZCommonSizes.bestFit(aspect)   (≈, only within 5 %)
+```
+
+`ZRectAspect` implements Zhang & He (2007): with corners m1..m4 (TL, TR,
+BL, BR) and the principal point at the image centre it computes
+k2, k3, n2 = k2·m2 − m1, n3 = k3·m3 − m1, solves the focal length from
+n2/n3 when no EXIF focal length is given (rejecting implausible values),
+and returns √(‖A⁻¹n2‖² / ‖A⁻¹n3‖²). On Next the warp receives
+`aspectWH = 1 / aspect` and `ZQuadMath.warpOutputSize` keeps the longer
+measured side and derives the other from it.
+
+## 17. Photo Hints
+
+`ZPhotoChecker.check(bytes, candidates)` runs once in the frame step, right
+after detection (or at once without a detector), and never blocks: Next
+stays enabled and a failing checker shows nothing. The result, whether it
+ran and whether the user closed the hint travel in `FrameCropResult`
+(`photoIssue`, `photoChecked`, `hintClosed`), so "‹ Frame" does not check
+again or bring a closed hint back.
+
+The default `ZPhotoQuality` decodes the photo at 512 px (engine decoder,
+`targetWidth`/`targetHeight`) and measures, in pure Dart:
+
+| Hint | Measure | Fires when |
+|---|---|---|
+| glare | share of pixels with luma ≥ 245 and channel spread ≤ 30 inside the outermost outline's bounds (else the middle 80 %) | 1.5 % ≤ share ≤ 50 % (above that the artwork itself is white or the photo is blown out) |
+| cornersMissing | outermost outline touching the photo edge (≤ 0.4 %) | 1–3 corners on the edge (4 = the whole photo, no evidence) |
+| tooDark | mean luma and 95th percentile | mean < 55 and p95 < 130 |
+| blurry | 4-neighbour Laplacian: variance and 99.5th percentile of \|L\| | variance < 60 and p99.5 < 40, and not too dark (a flat painting keeps the frame's sharp edges) |
+
+Only one hint is shown, in that order. The banner (`ZPhotoHintBanner`)
+sits between the header and the photo: Retake (only with `onRetake`), Use
+anyway and a 44 px cross; both close it. The fixtures in
+`test/fixtures/photo_quality` come from `tool/make_photo_quality_fixtures.dart`.
+
+
+## 18. Auto Colour Fix
+
+`ZAutoLevels.fromBytes` decodes the current image at 256 px and returns a
+per-channel affine map `out = gain · in + offset`:
+
+1. per-channel stretch of the 0.5 / 99.5 % percentiles to 0..255 (range at
+   least 255 / 2.5, so the gain is capped);
+2. white balance: pixels at or above the 90th luma percentile with a
+   channel spread ≤ 40 (the mat, paper) are averaged after the stretch and
+   each channel is scaled towards their mean (±15 %, at least 1 % of the
+   pixels needed);
+3. contrast ×1.06 around 127.5.
+
+`hazy` = not a no-op and either (1st percentile luma ≥ 28 and
+99th − 1st < 200) or a white-balance correction ≥ 6 % on a channel. The six
+numbers live in `ImageEditorState.autoLevels` and are folded in front of
+the brightness/contrast/saturation matrix
+(`ColorFilterMatrix.combinedMatrix(auto:)`), so the canvas, the GPU export
+and the pixel fallback apply exactly the same transform. The automatic
+first setting is not an undo step; the user's taps are. The compare
+overlay in `ImageCanvas` (`showCompare`) clips the adjusted image from the
+split line and shows the unadjusted one to its left.
+
+## 19. Round and Oval Frames
+
+`ZFrameCandidate.shape` (`ZFrameShape.rectangle | round | oval`) travels
+with each outline; the four corners stay the source of truth for every
+shape, so turning, chips, dragging, the warp and reopening work unchanged.
+The ellipse is the unit square's inscribed circle mapped through
+`ZQuadMath.squareToQuad` (`inscribedEllipse`, `ellipseTouchPoints`), so
+after the perspective warp it is exactly the ellipse inscribed in the
+output rectangle. A round outline's aspect is forced to 1 (unless an exact
+size is known), so it comes out as a circle; `ZPerspectiveWarp.maskEllipse`
+then clears (or fills) everything outside it with a one-pixel anti-aliased
+edge.
+
+The current shape is `shapeOverrides[base ?? -1] ?? candidates[base].shape`.
+"Wrong?" writes an override for the current outline; Reset clears them.
+`FrameCropResult.shape` / `shapeOverrides` restore the step on "‹ Frame",
+and a changed shape counts as a changed outline.
+
+Transparency survives the upload in the Monogram app (checked on
+2026-11-25): the editor saves PNG (`ImageOutputFormat.auto`), the app
+re-encodes large photos to WebP (alpha kept), the API stores the uploaded
+bytes unchanged (SkiaSharp only reads the dimensions) and imgproxy serves
+`f:webp` variants. Only JPEG output (and imgproxy's JPEG PDF thumbnails)
+lose alpha, hence `roundFrameFill`.
+
+## 20. Safe Areas
+
+* `ZImageEditor.edgeToEdge` switches the system UI to
+  `SystemUiMode.edgeToEdge` and wraps the editor in an
+  `AnnotatedRegion<SystemUiOverlayStyle>` (transparent bars, light icons);
+  otherwise the legacy behaviour (status bar hidden) stays.
+* Header: `FrameStepHeader` and, with `theme.showTitle` or `edgeToEdge`,
+  the editor header put a `padding.top` spacer above a 44 px button row,
+  so nothing sits beside the Dynamic Island.
+* Bottom panels add `padding.bottom`; sheets use `useSafeArea`.
+* Handles: the frame canvas uses a horizontal padding of
+  `max(theme.canvasPadding, 24, systemGestureInsets.left/right + 12)`;
+  edge to edge, the editor canvas gets the same side margin.
+* The photo hint is capped at 30 % of the screen height (min 132 px); its
+  text scrolls inside, the buttons stay visible.
+* `test/frame/safe_area_test.dart` runs every screen on six phone
+  profiles at text scale 1.3 and checks for overflow, insets and handle
+  margins.

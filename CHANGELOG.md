@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* frame evidence (`onFrameEvidence`, `ZFrameEvidence`, `ZFrameLevel`, `ZFrameCandidate.level` / `matAround`, `FrameCropResult.evidence`): frame, mat, glass reflections and shape seen in the frame step, for medium suggestions
+* size sheet restyle: labels Height / Width / Depth under "Dimensions, including frame (cm)", no × separators, 48 px fields and buttons, colours from `ZImageEditorTheme.size*` (neutral defaults)
+* `FrameMeasurementLines` is exported (the app draws measured sizes on its live camera)
+* safe areas (`edgeToEdge`, `orientationsAfterClose`): edge-to-edge with transparent bars and light icons, header buttons always below the status bar / Dynamic Island in the themed look, handles kept out of the system back-swipe areas (≥ 24 px), photo hint capped on small screens (its text scrolls, buttons stay), editor locks to portrait and restores the app's orientations
+* round and oval frames (`ZFrameShape`, `ZFrameCandidate.shape`, `ZFrameShapeLabel`, `showZFrameShapeMenu`, `roundFrameFill`): the detector's shape per outline; elliptical outline with four side handles; "Round frame found · Wrong?" with a Rectangle / Round / Oval menu (no shape buttons); round outlines are rectified to a circle; outside the ellipse is transparent (filled with #F5F0F0 for JPEG output); square common sizes (50 × 50 …)
+* "Auto" colour fix in the themed Adjust tab (`enableAutoFix`, `ZAutoLevels`, `ZAutoFixLabels`): per-channel black/white stretch, white balance from the white mat, mild contrast; turns itself on for hazy photos (lifted blacks with a short range, or a tinted mat), one tap turns it off, Before/After drag-compare, part of the export
+* frame step restyled per the approved design: dashed alternative outlines, ringed handles, 44 px chip tap areas, new line icons
+* artwork size tools (`enableSizeTools`, `artworkSize`, `onArtworkSizeConfirmed`): Size tool, red measurement lines (≈ estimated / exact), "Real size of the artwork" sheet with common sizes, auto-fill of the other side and depth picks
+* photo hints in the frame step (`photoChecker`, `ZPhotoQuality`, `ZPhotoIssue`, `onRetake`, `ZPhotoHintLabels`): at most one calm banner for glare, cut-off frame, darkness or blur, with Retake / Use anyway / dismiss; never blocks
+* tip sheet before the camera (`showZPhotoTipSheet`, `ZPhotoTipSheet`, `ZPhotoTipLabels`): three photo tips, "Take photo" and "Don’t show this again" (the app persists the choice)
+* straightened images keep the real shape (`ZRectAspect`: perspective aspect ratio with the EXIF focal length; `warpOutputSize(aspectWH:)`)
+* optional perspective "frame" step (`frameDetector`, `startWithFrameCrop`, `ZFrameCandidate`, `ZQuadMath`, `ZPerspectiveWarp`): choose a four-corner outline from up to three detector suggestions or drag the corners (with magnifier), rotate, then continue editing the straightened image
+* optional enhancer toggle in the frame step (`imageEnhancer`, `ZImageEnhancer`), on by default
+* `ZImageEditorTheme` for the editor chrome and the frame step; the default keeps the current look
+* frame step: output capped at 6000 px (`ZPerspectiveWarp.defaultMaxOutputSide`), palette/1-bit sources supported, Next disabled while detection/enhancement runs, load errors shown with Cancel, edits kept when the outline is unchanged
+
+### Bug Fixes
+
+* frame step: Next no longer fails with "Failed to process image" for HEIC/HEIF (or other) photos the `image` package can't decode; they are decoded by the engine codec (same orientation as shown) and warped from RGBA (`ZPerspectiveWarp.decodeWithEngine`, `warpRgbaSync`); the pixel fallback export does the same. The error dialog's text is in `ZFrameCropLabels` (`processErrorTitle`, `processErrorMessage`, `processErrorOk`)
+* measurement lines no longer overflow when the outline is shorter than its label (the label is shown alone, scaled down)
+* unmodified images are returned as a byte-identical copy in a new temp file with the correct extension (from the magic bytes), never as the caller's own `File` and never as `.tmp`
+* undo/redo map the crop rect to the current canvas size
+* unmodified images are returned without re-encoding again (the initial fitted crop rect counted as an edit)
+* the crop rect stays on the same image area when the canvas changes height (switching tabs, aspect-ratio strip)
+* `TransformationService.clampPanOffset` no longer throws when the allowed pan range is empty
+* the pixel fallback export applies brightness/contrast/saturation like the preview (brightness used to turn the image white or black)
+
 ## [0.9.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.2...v0.9.0) (2026-05-25)
 
 
