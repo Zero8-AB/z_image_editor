@@ -15,6 +15,7 @@ Future<SheetHarness> pumpSheet(
   double? aspect = 1.25,
   ZArtworkSize? initial,
   double keyboard = 0,
+  ZImageEditorTheme theme = designTheme,
 }) async {
   final h = SheetHarness();
   tester.view.physicalSize = size;
@@ -30,7 +31,7 @@ Future<SheetHarness> pumpSheet(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: size.height - 56),
           child: ZArtworkSizeSheet(
-            theme: designTheme,
+            theme: theme,
             estimatedAspectHW: aspect,
             initial: initial,
             onConfirm: (s) => h.confirmed = s,
@@ -114,7 +115,7 @@ void main() {
         expect(find.byKey(const Key('z_size_presets')), findsNothing);
         expect(find.textContaining('wide, about 1 : 4', findRichText: true),
             findsOneWidget);
-        expect(find.text('HOW SIZES ARE SUGGESTED'), findsOneWidget);
+        expect(find.text('How sizes are suggested'), findsOneWidget);
         await tester
             .ensureVisible(find.byKey(const Key('z_size_field_height')));
         await tester.enterText(

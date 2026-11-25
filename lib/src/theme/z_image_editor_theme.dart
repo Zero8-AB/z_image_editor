@@ -68,6 +68,34 @@ class ZImageEditorTheme {
   final Color sheetEstimatedBorderColor;
   final Color sheetBestFitColor;
 
+  // ── Size sheet form (fields, common sizes, depth chips) ───────────────
+  /// Fill of the Height / Width / Depth fields (also their idle 2 px
+  /// border, so focusing never changes the field's size).
+  final Color sizeFieldColor;
+
+  /// Value text in the fields (typed and estimated "≈ …").
+  final Color sizeFieldTextColor;
+
+  /// 2 px solid border of the focused field.
+  final Color sizeFieldFocusColor;
+
+  /// 2 px dashed border of a field holding an estimated value.
+  final Color sizeFieldEstimatedColor;
+
+  /// Field labels (Height, Width, Depth) and section headings.
+  final Color sizeLabelColor;
+
+  /// Helper lines under the fields ("Depth: Default 2 cm · …").
+  final Color sizeHelperColor;
+
+  /// Common-size buttons and depth chips: fill and text, unselected and
+  /// selected, and the "Best fit" line on the selected button.
+  final Color sizeOptionColor;
+  final Color sizeOptionTextColor;
+  final Color sizeOptionSelectedColor;
+  final Color sizeOptionSelectedTextColor;
+  final Color sizeOptionBestFitColor;
+
   // ── Photo hint banner ─────────────────────────────────────────────────
   final Color hintBannerColor;
   final Color hintBodyColor;
@@ -159,6 +187,17 @@ class ZImageEditorTheme {
     this.sheetEstimatedFillColor = const Color(0xFFF8F9FA),
     this.sheetEstimatedBorderColor = const Color(0xFFA0A0A0),
     this.sheetBestFitColor = const Color(0xFF8A1B1B),
+    this.sizeFieldColor = const Color(0xFFF5F0F0),
+    this.sizeFieldTextColor = const Color(0xFF282525),
+    this.sizeFieldFocusColor = const Color(0xFFCE5151),
+    this.sizeFieldEstimatedColor = const Color(0xFFA0A0A0),
+    this.sizeLabelColor = const Color(0xFF282525),
+    this.sizeHelperColor = const Color(0xFF646464),
+    this.sizeOptionColor = const Color(0xFFF5F0F0),
+    this.sizeOptionTextColor = const Color(0xFF282525),
+    this.sizeOptionSelectedColor = const Color(0xFFCE5151),
+    this.sizeOptionSelectedTextColor = const Color(0xFFFDFDFB),
+    this.sizeOptionBestFitColor = const Color(0xFFFCD6D7),
     this.hintBannerColor = const Color(0xFF2A2626),
     this.hintBodyColor = const Color(0xFFBDB8B8),
     this.showMeasurements = false,

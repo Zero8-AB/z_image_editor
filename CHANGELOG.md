@@ -4,6 +4,8 @@
 
 ### Features
 
+* frame evidence (`onFrameEvidence`, `ZFrameEvidence`, `ZFrameLevel`, `ZFrameCandidate.level` / `matAround`, `FrameCropResult.evidence`): frame, mat, glass reflections and shape seen in the frame step, for medium suggestions
+* size sheet restyle: labels Height / Width / Depth under "Dimensions, including frame (cm)", no × separators, 48 px fields and buttons, colours from `ZImageEditorTheme.size*` (neutral defaults)
 * `FrameMeasurementLines` is exported (the app draws measured sizes on its live camera)
 * safe areas (`edgeToEdge`, `orientationsAfterClose`): edge-to-edge with transparent bars and light icons, header buttons always below the status bar / Dynamic Island in the themed look, handles kept out of the system back-swipe areas (≥ 24 px), photo hint capped on small screens (its text scrolls, buttons stay), editor locks to portrait and restores the app's orientations
 * round and oval frames (`ZFrameShape`, `ZFrameCandidate.shape`, `ZFrameShapeLabel`, `showZFrameShapeMenu`, `roundFrameFill`): the detector's shape per outline; elliptical outline with four side handles; "Round frame found · Wrong?" with a Rectangle / Round / Oval menu (no shape buttons); round outlines are rectified to a circle; outside the ellipse is transparent (filled with #F5F0F0 for JPEG output); square common sizes (50 × 50 …)

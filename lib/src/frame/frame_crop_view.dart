@@ -105,6 +105,17 @@ class FrameCropResult {
     this.enhancedBytes,
     this.enhancerRan = false,
   });
+
+  /// What the step saw (frame, mat, glass, shape), or null when the
+  /// detector did not run or found no outline.
+  ZFrameEvidence? get evidence => !detectionDone || candidates.isEmpty
+      ? null
+      : ZFrameEvidence.fromCandidates(
+          candidates,
+          glassReflections:
+              enhancedBytes != null || photoIssue == ZPhotoIssue.glare,
+          shapeOverrides: shapeOverrides,
+        );
 }
 
 /// Signature of the function that rectifies the image; injectable for tests.
@@ -565,6 +576,8 @@ class _FrameCropViewState extends State<FrameCropView> {
         score: c.score,
         preselected: c.preselected,
         shape: c.shape,
+        level: c.level,
+        matAround: c.matAround,
       ));
       if (valid.length == kMaxFrameCandidates) break;
     }

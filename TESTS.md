@@ -9,7 +9,8 @@ Run all with `flutter test`.
 Items refer to the frame-crop plan: 1 Edit image opens the editor ·
 2 frame step look · 3 measurement lines · 4 tip sheet · 5 right shape ·
 6 size sheet · 7 photo hints · 8 Auto colour fix · 9 round / oval frames ·
-10 safe areas · 11 live camera (app) · 12 depth sensor (app).
+10 safe areas · 11 live camera (app) · 12 depth sensor (app) ·
+13 medium suggestion (evidence here, the form in the app).
 "Edit image" (1), the live camera (11) and the depth sensor (12) are app
 screens: see `TESTS.md` in the Monogram app.
 
@@ -66,10 +67,24 @@ screens: see `TESTS.md` in the Monogram app.
 | 6 | Keyboard state | `size_sheet_test` › keyboard open: Confirm pinned above it…; `safe_area_test` › size sheet: Confirm above the home bar and the keyboard |
 | 6 | Keyboard: tapping Height / Width / Depth keeps focus and the same field while the keyboard opens (no blink); the field scrolls above Confirm, Confirm above the keyboard; typing updates Confirm (3 phones, text scale 1.3, estimated ≈ depth) | `frame/size_sheet_keyboard_test.dart` › keyboard @ {phone} group |
 | 6 | Common sizes and depth chips do not move when one is picked, or when typing clears the pick (button and label rects) | `size_sheet_keyboard_test` › presets stay put group |
+| 6 | Look (app's rose form style via theme): headings and Height / Width / Depth labels Jost 18 #282525 under "Dimensions, including frame (cm)", no "(cm)" on labels, no × separators; helper "Depth: Default 2 cm · change if needed" 14 #6F6767 | `frame/size_sheet_style_test.dart` › headings and labels: 18 px charcoal, no "(cm)", no × |
+| 6 | Fields: #FCD6D7 fill, #B63B3B Jost 18, 48 px, radius 4, constant 2 px border in the fill colour (no idle border), text 12 px inside, 16 px between fields | `size_sheet_style_test` › fields: rose, 48 px, falu 18, 16 px apart, no idle border |
+| 6 | Estimated value ("≈ 2"): 2 px dashed #B63B3B; focused: 2 px solid #B63B3B; the field keeps its size | `size_sheet_style_test` › estimated depth: 2 px dashed falu; focus: 2 px solid falu; the field keeps its size |
+| 6 | Common-size buttons: 48 px, Jost 16, unselected #FCD6D7 / #B63B3B, selected #B63B3B / #FCFCFC with "Best fit" #FCD6D7 12; same border and weight in both states | `size_sheet_style_test` › common sizes: 48 px, Jost 16; rose / falu, selected falu / light…; no jump: `size_sheet_keyboard_test` › presets stay put group |
+| 6 | Depth chips: Jost 16 pills, same colours, as wide as their label, side by side in wrapping rows | `size_sheet_style_test` › depth chips: pills in Jost 16…; `size_sheet_keyboard_test` › presets stay put group |
+| 6 | Theme colours (`ZImageEditorTheme.size*`), package defaults neutral | `size_sheet_style_test` › package defaults stay neutral |
 | 6 | Typing clears / re-selects the common size; a preset fills both fields; a typed depth deselects the chip; Confirm reads H × W × D | `size_sheet_keyboard_test` › manual entry and presets group |
 | 6 | Known size, small phone scroll | `size_sheet_test` › known size: fields filled, depth kept; the sheet scrolls on a small phone |
 | 6 | Confirmed size reported | `frame_size_tools_test` › editor reports a confirmed size after Next |
 | 6 | "Estimated shape" is the photo's, not the confirmed size's | `frame_size_tools_test` › the sheet shows the photo’s estimate after a confirm |
+
+## Frame evidence (medium suggestion in the app)
+
+| Item | Element | Test |
+|---|---|---|
+| 13 | `ZFrameEvidence.fromCandidates`: artwork only → no frame; frame + artwork; frame + light mat; mat without a frame is no mat; no levels: 2+ nested outlines = frame; shape of the outermost outline incl. "Wrong?" | `frame/frame_evidence_test.dart` › ZFrameEvidence.fromCandidates group |
+| 13 | `FrameCropResult.evidence`: none before detection / without outlines; glass from the reflection fix or the glare hint | `frame_evidence_test` › FrameCropResult.evidence group |
+| 13 | `ZImageEditor.onFrameEvidence` on Next (levels and mat kept through the frame step); nothing found: not called | `frame_evidence_test` › ZImageEditor.onFrameEvidence group |
 
 ## Tip sheet ("Photograph your artwork")
 

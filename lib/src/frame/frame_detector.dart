@@ -6,6 +6,22 @@ import 'dart:ui' show Offset;
 /// middle, through the same perspective as the corners).
 enum ZFrameShape { rectangle, round, oval }
 
+/// What a detected outline is, when the detector knows it.
+enum ZFrameLevel {
+  /// Not said by the detector.
+  unknown,
+
+  /// The outer edge of a frame.
+  frame,
+
+  /// A level between the frame and the artwork (inner frame edge, mat
+  /// window).
+  inner,
+
+  /// The artwork itself (the innermost level).
+  artwork,
+}
+
 /// One outline the frame step can offer: four corners of a (possibly
 /// perspective-distorted) rectangle in the photo, plus a label for its chip.
 ///
@@ -31,12 +47,21 @@ class ZFrameCandidate {
   /// "Round frame found" / "Oval frame found"; each level keeps its own.
   final ZFrameShape shape;
 
+  /// Which level this outline is (frame, inner, artwork), when known.
+  final ZFrameLevel level;
+
+  /// Whether a mat (a light, even band) lies between this outline and the
+  /// next outer one, as seen by the detector.
+  final bool matAround;
+
   ZFrameCandidate({
     required List<Offset> corners,
     required this.label,
     this.score = 0,
     this.preselected = false,
     this.shape = ZFrameShape.rectangle,
+    this.level = ZFrameLevel.unknown,
+    this.matAround = false,
   }) : corners = List.unmodifiable(corners) {
     if (corners.length != 4) {
       throw ArgumentError.value(
@@ -48,8 +73,88 @@ class ZFrameCandidate {
   }
 
   @override
-  String toString() =>
-      'ZFrameCandidate($label, ${shape.name}, score: $score, $corners)';
+  String toString() => 'ZFrameCandidate($label, ${shape.name}, '
+      '${level.name}${matAround ? ', mat' : ''}, score: $score, $corners)';
+}
+
+/// What the frame step saw in the photo, for guesses such as the artwork's
+/// medium: cheap, from the detector's levels and the reflection fix.
+class ZFrameEvidence {
+  /// A frame was found around the artwork.
+  final bool hasFrame;
+
+  /// A mat (light, even band) lies between the frame and the artwork.
+  final bool hasMat;
+
+  /// Reflections (glass) were found: the enhancer had something to remove
+  /// or the photo check reported glare.
+  final bool glassReflections;
+
+  /// Shape of the outermost outline (after a "Wrong?" correction).
+  final ZFrameShape shape;
+
+  const ZFrameEvidence({
+    required this.hasFrame,
+    this.hasMat = false,
+    this.glassReflections = false,
+    this.shape = ZFrameShape.rectangle,
+  });
+
+  /// Reads the evidence from the detector's [candidates]. Without levels
+  /// from the detector, two or more nested outlines count as a frame.
+  /// [shapeOverrides] are the shapes picked with "Wrong?", by candidate
+  /// index.
+  factory ZFrameEvidence.fromCandidates(
+    List<ZFrameCandidate> candidates, {
+    bool glassReflections = false,
+    Map<int, ZFrameShape> shapeOverrides = const {},
+  }) {
+    final knowsLevels = candidates.any((c) => c.level != ZFrameLevel.unknown);
+    final hasFrame = knowsLevels
+        ? candidates.any((c) => c.level == ZFrameLevel.frame)
+        : candidates.length >= 2;
+    var outer = -1;
+    var area = -1.0;
+    for (var i = 0; i < candidates.length; i++) {
+      final a = _area(candidates[i].corners);
+      if (a > area) {
+        area = a;
+        outer = i;
+      }
+    }
+    return ZFrameEvidence(
+      hasFrame: hasFrame,
+      hasMat: hasFrame && candidates.any((c) => c.matAround),
+      glassReflections: glassReflections,
+      shape: outer < 0
+          ? ZFrameShape.rectangle
+          : shapeOverrides[outer] ?? candidates[outer].shape,
+    );
+  }
+
+  static double _area(List<Offset> q) {
+    var s = 0.0;
+    for (var i = 0; i < q.length; i++) {
+      final a = q[i], b = q[(i + 1) % q.length];
+      s += a.dx * b.dy - b.dx * a.dy;
+    }
+    return s.abs() / 2;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ZFrameEvidence &&
+      other.hasFrame == hasFrame &&
+      other.hasMat == hasMat &&
+      other.glassReflections == glassReflections &&
+      other.shape == shape;
+
+  @override
+  int get hashCode => Object.hash(hasFrame, hasMat, glassReflections, shape);
+
+  @override
+  String toString() => 'ZFrameEvidence(frame: $hasFrame, mat: $hasMat, '
+      'glass: $glassReflections, ${shape.name})';
 }
 
 /// Finds candidate outlines (frame, mat window, artwork, ...) in a photo.

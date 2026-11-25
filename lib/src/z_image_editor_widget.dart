@@ -133,6 +133,11 @@ class ZImageEditor extends StatefulWidget {
   /// Called when the user confirms a size in the size sheet.
   final ValueChanged<ZArtworkSize>? onArtworkSizeConfirmed;
 
+  /// Called on Next in the frame step with what the step saw in the photo
+  /// (frame, mat, glass reflections, shape), e.g. to suggest a medium. Not
+  /// called when the detector did not run or found no outline.
+  final ValueChanged<ZFrameEvidence>? onFrameEvidence;
+
   /// Texts of the size sheet.
   final ZSizeSheetLabels sizeSheetLabels;
 
@@ -202,6 +207,7 @@ class ZImageEditor extends StatefulWidget {
     this.enableSizeTools = false,
     this.artworkSize,
     this.onArtworkSizeConfirmed,
+    this.onFrameEvidence,
     this.sizeSheetLabels = const ZSizeSheetLabels(),
     this.photoChecker,
     this.photoHintLabels = const ZPhotoHintLabels(),
@@ -302,6 +308,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
         size != previous?.size) {
       widget.onArtworkSizeConfirmed?.call(size);
     }
+    final evidence = result.evidence;
+    if (evidence != null) widget.onFrameEvidence?.call(evidence);
     // Reopened and nothing changed: keep the editor's crop/adjust edits.
     final unchanged = _frameReopened &&
         previous != null &&

@@ -367,6 +367,15 @@ sheet (height × width × depth, common sizes, depth quick picks).
   for wide art) when its shape matches within 5 %. Exact sizes show
   without "≈" and a lock icon.
 - `onArtworkSizeConfirmed` reports a size the user confirmed (after Next).
+- The sheet's fields, common sizes and depth chips take their colours from
+  `ZImageEditorTheme.size*` (`sizeFieldColor`, `sizeFieldTextColor`,
+  `sizeFieldFocusColor`, `sizeFieldEstimatedColor`, `sizeLabelColor`,
+  `sizeHelperColor`, `sizeOption*`); fields are 48 px with a constant 2 px
+  border (solid when focused, dashed for an estimate), buttons 48 px.
+- `onFrameEvidence` reports what the frame step saw on Next
+  (`ZFrameEvidence`: `hasFrame`, `hasMat`, `glassReflections`, `shape`),
+  e.g. to suggest the artwork's medium. It comes from the detector's levels
+  (`ZFrameCandidate.level`, `matAround`) and the reflection fix / glare hint.
 
 ```dart
 ZImageEditor(

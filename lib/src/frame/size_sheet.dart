@@ -14,6 +14,7 @@ class ZSizeSheetLabels {
   final String checkHint;
   final String noMatchHint;
   final String commonSizes;
+  final String dimensions;
   final String height;
   final String width;
   final String depth;
@@ -35,10 +36,11 @@ class ZSizeSheetLabels {
         'Check the size. We can’t measure it exactly from a photo.',
     this.noMatchHint =
         'No common size has this shape. Enter one side, and we fill in the other.',
-    this.commonSizes = 'Common sizes · height × width (cm)',
-    this.height = 'Height (cm)',
-    this.width = 'Width (cm)',
-    this.depth = 'Depth (cm)',
+    this.commonSizes = 'Common sizes, height × width (cm)',
+    this.dimensions = 'Dimensions, including frame (cm)',
+    this.height = 'Height',
+    this.width = 'Width',
+    this.depth = 'Depth',
     this.depthHint = 'Depth: Default 2 cm · change if needed',
     this.autoFilledHint = 'filled in from the shape. ',
     this.bestFit = 'Best fit',
@@ -345,10 +347,7 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
             key: const Key('z_size_presets'),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l.commonSizes.toUpperCase(),
-                  style: _text(12,
-                          color: t.sheetMutedColor, weight: FontWeight.w500)
-                      .copyWith(letterSpacing: 0.7)),
+              _heading(l.commonSizes),
               const SizedBox(height: 8),
               LayoutBuilder(builder: (context, c) {
                 final w = (c.maxWidth - 16) / 3;
@@ -375,15 +374,22 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
             ],
           );
 
-    final fields = Row(
+    final fields = Column(
       key: _fieldsKey,
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _field(_Field.height, l.height, _h, _hFocus)),
-        _times(),
-        Expanded(child: _field(_Field.width, l.width, _w, _wFocus)),
-        _times(),
-        Expanded(child: _field(_Field.depth, l.depth, _d, _dFocus)),
+        _heading(l.dimensions, key: const Key('z_size_dimensions')),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: _field(_Field.height, l.height, _h, _hFocus)),
+            const SizedBox(width: 16),
+            Expanded(child: _field(_Field.width, l.width, _w, _wFocus)),
+            const SizedBox(width: 16),
+            Expanded(child: _field(_Field.depth, l.depth, _d, _dFocus)),
+          ],
+        ),
       ],
     );
 
@@ -396,7 +402,8 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('$autoFilled${l.depthHint}',
-            style: _text(12, color: t.sheetMutedColor)),
+            key: const Key('z_size_depth_hint'),
+            style: _text(14, color: t.sizeHelperColor).copyWith(height: 1.35)),
         const SizedBox(height: 4),
         // All four chips in view (wrapping onto a second line on narrow
         // phones) rather than a sideways scroll that could hide one or
@@ -455,12 +462,9 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l.howTitle.toUpperCase(),
-                style:
-                    _text(12, color: t.sheetMutedColor, weight: FontWeight.w500)
-                        .copyWith(letterSpacing: 0.7)),
+            _heading(l.howTitle),
             const SizedBox(height: 8),
-            Text(l.howBody, style: _text(13, color: t.sheetMutedColor)),
+            Text(l.howBody, style: _text(14, color: t.sizeHelperColor)),
           ],
         ),
     ];
@@ -553,11 +557,14 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
     );
   }
 
-  Widget _times() => SizedBox(
-        width: 18,
-        height: 44,
-        child: Center(
-            child: Text('×', style: _text(16, color: t.sheetMutedColor))),
+  /// Section heading and field label: 18 px in [ZImageEditorTheme.sizeLabelColor].
+  Widget _heading(String text, {Key? key}) => Text(
+        text,
+        key: key,
+        maxLines: 1,
+        overflow: TextOverflow.fade,
+        softWrap: false,
+        style: _text(18, color: t.sizeLabelColor).copyWith(height: 1),
       );
 
   Widget _field(
@@ -568,42 +575,29 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
   ) {
     final estimated = _estimated.contains(f);
     final focused = focus.hasFocus;
+    final dashed = estimated && !focused;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            maxLines: 1,
-            overflow: TextOverflow.fade,
-            softWrap: false,
-            style: _text(12, color: t.sheetMutedColor)),
+        _heading(label),
         const SizedBox(height: 4),
         CustomPaint(
-          foregroundPainter: estimated && !focused
-              ? _DashedBorderPainter(t.sheetEstimatedBorderColor)
-              : null,
+          key: Key('z_size_box_${f.name}'),
+          foregroundPainter:
+              dashed ? _DashedBorderPainter(t.sizeFieldEstimatedColor) : null,
           child: Container(
-            height: 44,
+            height: 48,
+            // A 2 px border in every state (in the fill colour when idle),
+            // so focusing or estimating never changes the field's size.
             decoration: BoxDecoration(
-              color: estimated && !focused
-                  ? t.sheetEstimatedFillColor
-                  : t.sheetFieldColor,
+              color: t.sizeFieldColor,
               borderRadius: BorderRadius.circular(4),
-              border: estimated && !focused
-                  ? null
-                  : Border.all(
-                      color: focused ? t.sheetAccentColor : t.sheetBorderColor,
-                      width: focused ? 2 : 1,
-                    ),
-              boxShadow: focused
-                  ? [
-                      BoxShadow(
-                        color: t.sheetAccentColor.withValues(alpha: 0.18),
-                        spreadRadius: 3,
-                      ),
-                    ]
-                  : null,
+              border: Border.all(
+                color: focused ? t.sizeFieldFocusColor : t.sizeFieldColor,
+                width: 2,
+              ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             alignment: Alignment.centerLeft,
             child: TextField(
               decoration: const InputDecoration.collapsed(hintText: ''),
@@ -615,9 +609,8 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.,≈ ]')),
               ],
-              style: _text(16,
-                  color: estimated ? t.sheetMutedColor : t.sheetTextColor),
-              cursorColor: t.sheetAccentColor,
+              style: _text(18, color: t.sizeFieldTextColor),
+              cursorColor: t.sizeFieldFocusColor,
               onTap: () {
                 if (estimated) {
                   // Start from the number, without the "≈ ".
@@ -652,16 +645,17 @@ class _DashedBorderPainter extends CustomPainter {
     drawDashedPath(
       canvas,
       Path()
+        // On the 2 px border: the stroke's middle is 1 px inside.
         ..addRRect(RRect.fromRectAndRadius(
-          Offset.zero & size,
-          const Radius.circular(4),
+          (Offset.zero & size).deflate(1),
+          const Radius.circular(3),
         )),
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-      dash: 4,
-      gap: 3,
+        ..strokeWidth = 2,
+      dash: 6,
+      gap: 4,
     );
   }
 
@@ -688,49 +682,46 @@ class _PresetButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = theme;
+    final fill = selected ? t.sizeOptionSelectedColor : t.sizeOptionColor;
     return Semantics(
       button: true,
       selected: selected,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 44,
+          height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          // A 1 px border in both states; the selected 1.5 px ring is drawn
-          // on top, inside the button, so selecting never moves the label.
+          // Same 1 px border (in the fill colour) and the same text weight
+          // in both states: selecting only changes colours, never the size
+          // or the label's position.
           decoration: BoxDecoration(
-            color: selected ? t.sheetSelectedFillColor : t.sheetFieldColor,
+            color: fill,
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: selected ? t.sheetAccentColor : t.sheetBorderColor,
-            ),
-          ),
-          foregroundDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: selected ? t.sheetAccentColor : const Color(0x00000000),
-              width: 1.5,
-            ),
+            border: Border.all(color: fill),
           ),
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ZSteadyWeightText(label,
+                Text(label,
                     style: TextStyle(
                       fontFamily: t.fontFamily,
-                      fontSize: 14,
-                      color: t.sheetTextColor,
-                      fontWeight:
-                          selected ? FontWeight.w500 : FontWeight.normal,
+                      fontSize: 16,
+                      height: 1.15,
+                      color: selected
+                          ? t.sizeOptionSelectedTextColor
+                          : t.sizeOptionTextColor,
                     )),
                 if (bestFit != null)
                   Text(bestFit!,
                       style: TextStyle(
                         fontFamily: t.fontFamily,
                         fontSize: 12,
-                        color: t.sheetBestFitColor,
+                        height: 1.15,
+                        color: selected
+                            ? t.sizeOptionBestFitColor
+                            : t.sizeOptionTextColor,
                       )),
               ],
             ),
@@ -758,6 +749,7 @@ class _DepthChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = theme;
+    final fill = selected ? t.sizeOptionSelectedColor : t.sizeOptionColor;
     return Semantics(
       button: true,
       selected: selected,
@@ -766,33 +758,29 @@ class _DepthChip extends StatelessWidget {
         onTap: onTap,
         child: SizedBox(
           height: 44,
+          // widthFactor 1: as wide as the pill, not the whole row (a Wrap
+          // gives its children the full width to grow into).
           child: Center(
+            widthFactor: 1,
             child: Container(
               height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selected ? t.sheetSelectedFillColor : t.sheetFieldColor,
+                color: fill,
                 borderRadius: BorderRadius.circular(40),
-                border: Border.all(
-                  color: selected ? t.sheetAccentColor : t.sheetBorderColor,
-                ),
+                border: Border.all(color: fill),
               ),
-              foregroundDecoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(40),
-                border: Border.all(
-                  color:
-                      selected ? t.sheetAccentColor : const Color(0x00000000),
-                  width: 1.5,
-                ),
+              child: Center(
+                widthFactor: 1,
+                child: Text(label,
+                    style: TextStyle(
+                      fontFamily: t.fontFamily,
+                      fontSize: 16,
+                      color: selected
+                          ? t.sizeOptionSelectedTextColor
+                          : t.sizeOptionTextColor,
+                    )),
               ),
-              child: ZSteadyWeightText(label,
-                  style: TextStyle(
-                    fontFamily: t.fontFamily,
-                    fontSize: 14,
-                    color: t.sheetTextColor,
-                    fontWeight: selected ? FontWeight.w500 : FontWeight.normal,
-                  )),
             ),
           ),
         ),
