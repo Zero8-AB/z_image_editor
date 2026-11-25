@@ -248,6 +248,74 @@ void main() {
     expect(reported, const ZArtworkSize(heightCm: 40, widthCm: 30, depthCm: 2));
   });
 
+  testWidgets('editor reports the estimated size after Next', (tester) async {
+    final shown = <ZArtworkSize>[];
+    ZArtworkSize? confirmed;
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageBytesList: [testPng(w: 300, h: 400)],
+        frameDetector: FakeDetector([rect('With frame', 0.1)]),
+        enableSizeTools: true,
+        theme: sizeTheme,
+        onArtworkSize: shown.add,
+        onArtworkSizeConfirmed: (s) => confirmed = s,
+        onSaveAll: (_) {},
+        onCancel: () {},
+      ),
+    );
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    expect(shown, [
+      const ZArtworkSize(
+          heightCm: 40, widthCm: 30, source: ZSizeSource.estimated),
+    ]);
+    // Only estimated: nothing confirmed.
+    expect(confirmed, isNull);
+  });
+
+  testWidgets('editor reports a confirmed size as the shown size too',
+      (tester) async {
+    final shown = <ZArtworkSize>[];
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageBytesList: [testPng(w: 300, h: 400)],
+        frameDetector: FakeDetector([rect('With frame', 0.1)]),
+        enableSizeTools: true,
+        theme: sizeTheme,
+        onArtworkSize: shown.add,
+        onSaveAll: (_) {},
+        onCancel: () {},
+      ),
+    );
+    await tester.tap(find.byKey(const Key('z_frame_size')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('z_size_confirm')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    expect(shown, [const ZArtworkSize(heightCm: 40, widthCm: 30, depthCm: 2)]);
+  });
+
+  testWidgets('without sizeTools no size is reported', (tester) async {
+    final shown = <ZArtworkSize>[];
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageBytesList: [testPng(w: 300, h: 400)],
+        frameDetector: FakeDetector([rect('With frame', 0.1)]),
+        theme: sizeTheme,
+        onArtworkSize: shown.add,
+        onSaveAll: (_) {},
+        onCancel: () {},
+      ),
+    );
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    expect(shown, isEmpty);
+  });
+
   testWidgets('reopen → change the size → Next uses the new shape',
       (tester) async {
     List<File>? saved;
