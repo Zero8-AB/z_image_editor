@@ -127,10 +127,15 @@ class ZImageEditor extends StatefulWidget {
   final bool enableSizeTools;
 
   /// Size known up front (artwork details, or measured). Exact sizes are
-  /// shown without "≈" and give the straightened image its shape.
+  /// shown without "≈" and give the straightened image its shape. A
+  /// measured size belongs to the pre-selected outline (other outlines are
+  /// scaled from it, "≈"); one from the details to whichever outline its
+  /// shape fits.
   final ZArtworkSize? artworkSize;
 
-  /// Called when the user confirms a size in the size sheet.
+  /// Called (on Next) when the user confirmed a size in the size sheet and
+  /// kept the outline it was confirmed for. On another outline of the same
+  /// object only [onArtworkSize] is called, with the size scaled to it.
   final ValueChanged<ZArtworkSize>? onArtworkSizeConfirmed;
 
   /// Called on Next in the frame step with the size the step shows, whatever

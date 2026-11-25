@@ -485,8 +485,25 @@ confirmed) or derives an estimate:
 ```
 aspect H:W = exact size ?? 1 / ZRectAspect.widthOverHeight(quad px, image, focal)
                         ?? side averages
-shown size = exact ?? ZCommonSizes.bestFit(aspect)   (≈, only within 5 %)
+shown size = exact                                   (on the outline the size belongs to)
+          ?? sizeOnPlane(anchor, anchor size, quad)   (≈, whole cm; outlines nested with the anchor)
+          ?? ZCommonSizes.estimate(aspect)            (≈)
 ```
+
+A photo has no scale, so only one outline of an object is sized from the
+common sizes, and the outlines nested with it are measured against it:
+`ZRectAspect.sizeOnPlane` straightens the anchor quad to its rectangle
+(inverse of `ZQuadMath.squareToQuad`) and takes the other quad through the
+same transform. The anchor is the outline a size was confirmed or measured
+for (`_sizeCorners`; it follows Rotate and drags of that outline, and is
+kept in `FrameCropResult.anchorSize` / `anchorCorners`), else the
+detector's outermost outline with `ZCommonSizes.estimate` of its shape. A
+measured `knownSize` is tied to the pre-selected outline; a size from the
+artwork's details is tied to none. The full photo is not a level and keeps
+its own estimate.
+
+`ZCommonSizes.estimate` is `bestFit` (within 5 %), else the shape itself at
+the area of `ZCommonSizes.typical` (50 × 40) with sides rounded to 5 cm.
 
 `ZRectAspect` implements Zhang & He (2007): with corners m1..m4 (TL, TR,
 BL, BR) and the principal point at the image centre it computes

@@ -364,9 +364,21 @@ sheet (height × width × depth, common sizes, depth quick picks).
   phone lens), else from the average side lengths.
 - Estimates show "≈" ("≈ 50 × 40 cm · Check", "≈ 50 cm"): the best-fitting
   common size (40×30, 50×40, 70×50, 100×70, A3, A4; landscape versions
-  for wide art) when its shape matches within 5 %. Exact sizes show
-  without "≈" and a lock icon.
-- `onArtworkSizeConfirmed` reports a size the user confirmed (after Next).
+  for wide art) when its shape matches within 5 %; when no common size has
+  the shape (a 16 : 9 screen, a long strip), the outline's own shape at
+  the area of a typical 50 × 40, sides rounded to 5 cm ("≈ 60 × 35 cm";
+  `ZCommonSizes.estimate`). Exact sizes show without "≈" and a lock icon.
+- Nested outlines fit each other: only one outline gets its size from the
+  common sizes (the detector's outermost, e.g. "With frame"); the outlines
+  inside it are measured against it on the straightened plane
+  (`ZRectAspect.sizeOnPlane`), so "Artwork" is never larger than "With
+  frame". A size confirmed in the sheet, or a measured `artworkSize`
+  (tied to the pre-selected outline), is exact for its own outline only;
+  the other outlines are scaled from it and stay "≈". A size from the
+  artwork's details is not tied to an outline (exact wherever its shape
+  fits).
+- `onArtworkSizeConfirmed` reports a size the user confirmed (after Next),
+  when Next is pressed on the outline it was confirmed for.
 - `onArtworkSize` reports the size the frame step shows on Next, whatever its
   source: exact, or the "≈" estimate (`ZSizeSource.estimated`, no depth).
 - The sheet's fields, common sizes and depth chips take their colours from

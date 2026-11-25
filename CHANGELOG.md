@@ -22,6 +22,8 @@
 
 ### Bug Fixes
 
+* frame step sizes: nested outlines fit each other. Each outline used to be snapped to a common size from its own shape, so "Artwork" could show ≈ 100 × 70 cm inside a "With frame" of ≈ 70 × 50 cm. Now one outline is sized (the detector's outermost from the common sizes, or the one a size was confirmed or measured for) and the outlines nested with it are measured against it on the straightened plane (`ZRectAspect.sizeOnPlane`, `ZQuadMath.isInside`); a confirmed or measured size is exact on its own outline only and "≈" on the others, also for `onArtworkSize` / `onArtworkSizeConfirmed` (`FrameCropResult.anchorSize`, `anchorCorners`); the size sheet opens with the outline's shown estimate
+* frame step sizes: an outline whose shape fits no common size (a 16 : 9 screen) no longer shows "Size · Check" without a size: it gets its own shape at the area of a typical 50 × 40, sides rounded to 5 cm ("≈ 60 × 35 cm · Check"; `ZCommonSizes.estimate`, `typical`)
 * frame step: Next no longer fails with "Failed to process image" for HEIC/HEIF (or other) photos the `image` package can't decode; they are decoded by the engine codec (same orientation as shown) and warped from RGBA (`ZPerspectiveWarp.decodeWithEngine`, `warpRgbaSync`); the pixel fallback export does the same. The error dialog's text is in `ZFrameCropLabels` (`processErrorTitle`, `processErrorMessage`, `processErrorOk`)
 * measurement lines no longer overflow when the outline is shorter than its label (the label is shown alone, scaled down)
 * unmodified images are returned as a byte-identical copy in a new temp file with the correct extension (from the magic bytes), never as the caller's own `File` and never as `.tmp`

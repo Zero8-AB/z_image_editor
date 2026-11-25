@@ -142,6 +142,15 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
     if (init != null && init.isExact) {
       _h.text = formatCm(init.heightCm);
       _w.text = formatCm(init.widthCm);
+    } else if (init != null &&
+        (init.heightCm != _bestFit?.heightCm ||
+            init.widthCm != _bestFit?.widthCm)) {
+      // An estimate that is not this shape's common size (measured against
+      // another outline, or no common size has the shape): shown as the
+      // estimate it is, so typing one side still fills in the other.
+      _h.text = '≈ ${formatCm(init.heightCm)}';
+      _w.text = '≈ ${formatCm(init.widthCm)}';
+      _estimated.addAll([_Field.height, _Field.width]);
     } else if (_bestFit != null) {
       _preset = _bestFit;
       _h.text = formatCm(_bestFit!.heightCm);
@@ -393,11 +402,13 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       ],
     );
 
-    final autoFilled = _estimated.contains(_Field.width)
-        ? '${l.width.split(' ').first} ${l.autoFilledHint}'
-        : _estimated.contains(_Field.height)
-            ? '${l.height.split(' ').first} ${l.autoFilledHint}'
-            : '';
+    final estimatedWidth = _estimated.contains(_Field.width);
+    final estimatedHeight = _estimated.contains(_Field.height);
+    final autoFilled = estimatedWidth == estimatedHeight
+        ? '' // neither, or both (the step's estimate, nothing typed yet)
+        : estimatedWidth
+            ? '${l.width.split(' ').first} ${l.autoFilledHint}'
+            : '${l.height.split(' ').first} ${l.autoFilledHint}';
     final depth = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

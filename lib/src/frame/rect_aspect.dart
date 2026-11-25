@@ -4,6 +4,8 @@ import 'dart:ui' show Offset, Size;
 
 import 'package:image/image.dart' as img;
 
+import 'quad_math.dart';
+
 /// Recovers the real width : height of a photographed rectangle from its
 /// four image corners (Zhang & He, "Whiteboard scanning and image
 /// enhancement", 2007): the quad is the image of a rectangle under a
@@ -74,6 +76,56 @@ class ZRectAspect {
     if (a <= 0 || b <= 0) return null;
     final r = math.sqrt(a / b);
     return r.isFinite && r > 0 ? r : null;
+  }
+
+  /// Height and width of [quad] measured on the plane of [reference], a
+  /// quad whose real size is [referenceHeight] × [referenceWidth] (both
+  /// TL, TR, BR, BL, in the same coordinates, pixels or normalized): the
+  /// reference is straightened to its rectangle and [quad] goes through
+  /// the same transform, so nested outlines of one object (frame, mat
+  /// window, artwork) get sizes that fit each other. Each side is the mean
+  /// of the two opposite sides.
+  ///
+  /// Null for a degenerate [reference], or when [quad] reaches the
+  /// reference plane's horizon.
+  static ({double height, double width})? sizeOnPlane({
+    required List<Offset> reference,
+    required double referenceHeight,
+    required double referenceWidth,
+    required List<Offset> quad,
+  }) {
+    if (reference.length != 4 || quad.length != 4) return null;
+    if (!ZQuadMath.isConvex(reference)) return null;
+    // Square → reference, as the matrix [a b c; d e f; g h 1]; its inverse
+    // (adjugate, scale-free) takes image points to the unit square.
+    final m = ZQuadMath.squareToQuad(reference);
+    final a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5];
+    final g = m[6], h = m[7];
+    final inv = [
+      e - f * h, c * h - b, b * f - c * e, //
+      f * g - d, a - c * g, c * d - a * f, //
+      d * h - e * g, b * g - a * h, a * e - b * d, //
+    ];
+    // The reference's own corners have w of this sign.
+    final sign =
+        (inv[6] * reference[0].dx + inv[7] * reference[0].dy + inv[8]).sign;
+    if (sign == 0) return null;
+    final pts = <Offset>[];
+    for (final p in quad) {
+      final w = inv[6] * p.dx + inv[7] * p.dy + inv[8];
+      if (w * sign <= 1e-12) return null;
+      pts.add(Offset(
+        (inv[0] * p.dx + inv[1] * p.dy + inv[2]) / w * referenceWidth,
+        (inv[3] * p.dx + inv[4] * p.dy + inv[5]) / w * referenceHeight,
+      ));
+    }
+    final width = ((pts[1] - pts[0]).distance + (pts[2] - pts[3]).distance) / 2;
+    final height =
+        ((pts[3] - pts[0]).distance + (pts[2] - pts[1]).distance) / 2;
+    if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
+      return null;
+    }
+    return (height: height, width: width);
   }
 
   /// Width / height from the average lengths of opposite sides (no

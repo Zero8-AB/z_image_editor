@@ -155,6 +155,38 @@ class ZCommonSizes {
     return bestDiff <= tolerance ? best : null;
   }
 
+  /// The size assumed when no common size has the artwork's shape: a
+  /// medium-sized artwork (the middle of the common sizes).
+  static const typical = ZCommonSize(50, 40);
+
+  /// Sides of [estimate]'s fallback are rounded to this many centimetres,
+  /// so the numbers read as rough.
+  static const double roughStepCm = 5;
+
+  /// The "≈" size for a shape seen in a photo. A photo has no scale, so
+  /// this is a guess either way: the best-matching common size, or, when
+  /// no common size has the shape (a 16 : 9 screen, a long strip), the
+  /// photo's own shape at the area of the [typical] size, with the sides
+  /// rounded to [roughStepCm].
+  static ZArtworkSize estimate(double aspectHW) {
+    final fit = bestFit(aspectHW);
+    if (fit != null) {
+      return ZArtworkSize(
+        heightCm: fit.heightCm,
+        widthCm: fit.widthCm,
+        source: ZSizeSource.estimated,
+      );
+    }
+    final area = typical.heightCm * typical.widthCm;
+    double rough(double cm) =>
+        math.max(1, (cm / roughStepCm).round()) * roughStepCm;
+    return ZArtworkSize(
+      heightCm: rough(math.sqrt(area * aspectHW)),
+      widthCm: rough(math.sqrt(area / aspectHW)),
+      source: ZSizeSource.estimated,
+    );
+  }
+
   /// "about 5 : 4", "wide, about 1 : 4" — the shape as small whole numbers
   /// (H : W).
   static String ratioText(double aspectHW) {

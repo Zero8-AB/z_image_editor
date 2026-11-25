@@ -81,6 +81,95 @@ void main() {
     });
   });
 
+  group('ZRectAspect.sizeOnPlane', () {
+    // A 50 × 70 cm frame with a 5 cm mat window inset and a 30 × 40 cm
+    // print, all in one plane.
+    List<Offset> level(double w, double h,
+            {double yaw = 0, double pitch = 0}) =>
+        project(w, h, yaw: yaw, pitch: pitch);
+
+    for (final c in const [
+      (yaw: 0.0, pitch: 0.0),
+      (yaw: 30.0, pitch: 0.0),
+      (yaw: -25.0, pitch: 15.0),
+      (yaw: 40.0, pitch: -20.0),
+    ]) {
+      test('inner levels from the frame, yaw ${c.yaw} pitch ${c.pitch}', () {
+        final frame = level(50, 70, yaw: c.yaw, pitch: c.pitch);
+        for (final (w, h) in const [(40.0, 60.0), (30.0, 40.0), (50.0, 70.0)]) {
+          final s = ZRectAspect.sizeOnPlane(
+            reference: frame,
+            referenceHeight: 70,
+            referenceWidth: 50,
+            quad: level(w, h, yaw: c.yaw, pitch: c.pitch),
+          )!;
+          expect(s.width, closeTo(w, 1e-6));
+          expect(s.height, closeTo(h, 1e-6));
+        }
+      });
+
+      test('the frame from the print, yaw ${c.yaw} pitch ${c.pitch}', () {
+        final s = ZRectAspect.sizeOnPlane(
+          reference: level(30, 40, yaw: c.yaw, pitch: c.pitch),
+          referenceHeight: 40,
+          referenceWidth: 30,
+          quad: level(50, 70, yaw: c.yaw, pitch: c.pitch),
+        )!;
+        expect(s.width, closeTo(50, 1e-6));
+        expect(s.height, closeTo(70, 1e-6));
+      });
+    }
+
+    test('normalized coordinates work as well as pixels', () {
+      List<Offset> n(List<Offset> q) => [
+            for (final p in q)
+              Offset(p.dx / imageSize.width, p.dy / imageSize.height),
+          ];
+      final s = ZRectAspect.sizeOnPlane(
+        reference: n(level(50, 70, yaw: 30)),
+        referenceHeight: 70,
+        referenceWidth: 50,
+        quad: n(level(30, 40, yaw: 30)),
+      )!;
+      expect(s.width, closeTo(30, 1e-6));
+      expect(s.height, closeTo(40, 1e-6));
+    });
+
+    test('degenerate reference, or a quad beyond the horizon: null', () {
+      const flat = [Offset.zero, Offset(1, 0), Offset(2, 0), Offset(3, 0)];
+      expect(
+        ZRectAspect.sizeOnPlane(
+            reference: flat,
+            referenceHeight: 1,
+            referenceWidth: 1,
+            quad: level(30, 40)),
+        isNull,
+      );
+      // A strongly foreshortened reference: its plane's horizon crosses
+      // the image, and a quad over it has no size on that plane.
+      const steep = [
+        Offset(1900, 1000),
+        Offset(2100, 1000),
+        Offset(3000, 2000),
+        Offset(1000, 2000),
+      ];
+      expect(
+        ZRectAspect.sizeOnPlane(
+          reference: steep,
+          referenceHeight: 1,
+          referenceWidth: 1,
+          quad: const [
+            Offset(1000, 100),
+            Offset(3000, 100),
+            Offset(3000, 2000),
+            Offset(1000, 2000),
+          ],
+        ),
+        isNull,
+      );
+    });
+  });
+
   test('focalPxFromExif reads FocalLengthIn35mmFilm', () {
     final im = img.Image(width: 40, height: 30);
     im.exif.exifIfd['FocalLengthIn35mmFilm'] = img.IfdValueShort(26);

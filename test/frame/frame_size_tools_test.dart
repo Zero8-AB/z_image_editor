@@ -176,7 +176,7 @@ void main() {
             findsOneWidget);
       });
 
-      testWidgets('no matching size: "Size · Check" and no lines',
+      testWidgets('no matching size: a rough size in the outline’s shape',
           (tester) async {
         await pumpSizeStep(tester, size, candidates: [
           ZFrameCandidate(label: 'Wide', corners: const [
@@ -186,8 +186,12 @@ void main() {
             Offset(0.05, 0.55),
           ]),
         ]);
-        expect(sizeButton(tester).label, 'Size · Check');
-        expect(find.byKey(const Key('z_frame_height_line')), findsNothing);
+        // 0.1 × 400 px high, 0.9 × 300 px wide: about 1 : 7, at the area of
+        // the typical 50 × 40, sides rounded to 5 cm.
+        expect(sizeButton(tester).label, '≈ 15 × 115 cm · Check');
+        expect(sizeButton(tester).icon, ZLineIconKind.sizeEstimated);
+        expect(label(tester, 'z_frame_height_label'), '≈ 15 cm');
+        expect(label(tester, 'z_frame_width_label'), '≈ 115 cm');
       });
 
       testWidgets('lines stay inside the screen for a full-width outline',
