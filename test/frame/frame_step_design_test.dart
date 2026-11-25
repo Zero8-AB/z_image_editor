@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -194,8 +193,8 @@ void main() {
             tester.getCenter(find.byKey(const Key('z_frame_handle_1'))));
         await g.moveBy(const Offset(-8, 6));
         await tester.pump();
-        final loupe = tester.widget<CustomPaint>(
-            find.byKey(const Key('z_frame_loupe')));
+        final loupe =
+            tester.widget<CustomPaint>(find.byKey(const Key('z_frame_loupe')));
         expect((loupe.painter! as FrameLoupePainter).theme.loupeCrosshairColor,
             const Color(0xFFCE5151));
         await g.up();
@@ -205,13 +204,13 @@ void main() {
 
       testWidgets('tap on the photo cycles the outlines', (tester) async {
         await pumpDesign(tester, size);
-        await tester.tapAt(
-            tester.getCenter(find.byKey(const Key('z_frame_photo'))));
+        await tester
+            .tapAt(tester.getCenter(find.byKey(const Key('z_frame_photo'))));
         await tester.pump();
         // From With frame (last) the cycle goes to the full photo.
         expect(tool(tester, 'z_frame_full').active, isTrue);
-        await tester.tapAt(
-            tester.getCenter(find.byKey(const Key('z_frame_photo'))));
+        await tester
+            .tapAt(tester.getCenter(find.byKey(const Key('z_frame_photo'))));
         await tester.pump();
         expect(chip(tester, 0).selected, isTrue);
       });
