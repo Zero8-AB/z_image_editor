@@ -388,6 +388,19 @@ camera again); "Use anyway" and the cross close the banner. Nothing is ever
 blocked. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
 `ZPhotoChecker` for your own checks.
 
+### Safe areas
+
+Pass `edgeToEdge: true` to draw under transparent system bars (light
+icons, `SystemUiMode.edgeToEdge`); the controls use the real
+`MediaQuery` padding, and in the themed look (or edge to edge) the header
+buttons always sit below the status bar / Dynamic Island. Frame and crop
+handles keep at least 24 px (or the system back-swipe inset + 12 px) from
+the left and right edges. The editor locks to portrait while open and
+restores `orientationsAfterClose` (default: all) when it closes. All sheets
+use `isScrollControlled` and `useSafeArea`. Tested at 360 × 640 (24/48
+insets, and with gesture insets), 375 × 667, 393 × 852 (59/34), 412 × 915
+(3-button, 48) and 430 × 932, all at text scale 1.3.
+
 ### Round and oval frames
 
 A detector can mark an outline as round or oval

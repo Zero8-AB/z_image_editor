@@ -661,17 +661,27 @@ class _FrameCropViewState extends State<FrameCropView> {
                 : _continue,
           ),
           if (_issue != null && !_hintClosed)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: ZPhotoHintBanner(
-                theme: _theme,
-                labels: widget.hintLabels,
-                issue: _issue!,
-                onRetake: widget.onRetake == null || _applying
-                    ? null
-                    : widget.onRetake,
-                onUseAnyway: _closeHint,
-                onDismiss: _closeHint,
+            // Capped so the photo keeps its room on small phones with large
+            // text: the hint's text scrolls, its buttons stay in view.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: math.max(
+                  132.0,
+                  MediaQuery.sizeOf(context).height * 0.3,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: ZPhotoHintBanner(
+                  theme: _theme,
+                  labels: widget.hintLabels,
+                  issue: _issue!,
+                  onRetake: widget.onRetake == null || _applying
+                      ? null
+                      : widget.onRetake,
+                  onUseAnyway: _closeHint,
+                  onDismiss: _closeHint,
+                ),
               ),
             ),
           Expanded(child: _buildCanvas()),
@@ -769,8 +779,12 @@ class _FrameCropViewState extends State<FrameCropView> {
         children: [
           CupertinoActivityIndicator(color: _theme.mutedTextColor),
           const SizedBox(width: 10),
-          Text(labels.detectingLabel,
-              style: _theme.text(color: _theme.mutedTextColor)),
+          Flexible(
+            child: Text(labels.detectingLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _theme.text(color: _theme.mutedTextColor)),
+          ),
         ],
       );
     }
@@ -825,8 +839,16 @@ class _FrameCropViewState extends State<FrameCropView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final pad = _theme.canvasPadding;
+        // Corner handles stay out of the system back-swipe areas at the
+        // screen's left and right edges (and at least 24 px in).
+        final mq = MediaQuery.of(context);
+        final gesture = math.max(
+          mq.systemGestureInsets.left,
+          mq.systemGestureInsets.right,
+        );
+        final padX = math.max(pad, math.max(24.0, gesture + 12));
         final area = Size(
-          math.max(1, constraints.maxWidth - pad * 2),
+          math.max(1, constraints.maxWidth - padX * 2),
           math.max(1, constraints.maxHeight - pad * 2),
         );
         final odd = _turns.isOdd;

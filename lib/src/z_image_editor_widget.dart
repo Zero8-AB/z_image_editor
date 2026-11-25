@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:io'
     if (dart.library.html) 'package:z_image_editor/src/utils/platform_io_web.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -155,6 +156,17 @@ class ZImageEditor extends StatefulWidget {
   /// Texts of the themed Adjust tab and the Before/After compare.
   final ZAutoFixLabels autoFixLabels;
 
+  /// Draw edge to edge: the status and navigation bars stay visible and
+  /// transparent over the editor's dark background (light icons); the
+  /// controls keep to the safe area. When false (the default) the status
+  /// bar is hidden while the editor is open, as before.
+  final bool edgeToEdge;
+
+  /// Orientations to restore when the editor closes (it locks itself to
+  /// portrait while open). The default `[]` allows every orientation;
+  /// portrait-only apps pass `[DeviceOrientation.portraitUp]`.
+  final List<DeviceOrientation> orientationsAfterClose;
+
   /// Round / oval frames: outside the ellipse is transparent, except when
   /// [outputFormat] is JPEG (no alpha), where it is filled with this.
   final Color roundFrameFill;
@@ -197,6 +209,8 @@ class ZImageEditor extends StatefulWidget {
     this.enableAutoFix = false,
     this.autoFixLabels = const ZAutoFixLabels(),
     this.roundFrameFill = const Color(0xFFF5F0F0),
+    this.edgeToEdge = false,
+    this.orientationsAfterClose = const [],
   })  : assert(
           imageFiles != null || imageBytesList != null,
           'Provide imageFiles or imageBytesList.',
@@ -409,10 +423,14 @@ class _ZImageEditorState extends State<ZImageEditor> {
       _analyzeAuto();
     }
     if (!kIsWeb) {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: [SystemUiOverlay.bottom],
-      );
+      if (widget.edgeToEdge) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(
+          SystemUiMode.manual,
+          overlays: [SystemUiOverlay.bottom],
+        );
+      }
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
         DeviceOrientation.portraitDown,
@@ -424,12 +442,15 @@ class _ZImageEditorState extends State<ZImageEditor> {
   void dispose() {
     _editMenuOverlay?.remove();
     if (!kIsWeb) {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
-      // Restore all orientations when the editor is closed.
-      SystemChrome.setPreferredOrientations([]);
+      if (widget.edgeToEdge) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(
+          SystemUiMode.manual,
+          overlays: SystemUiOverlay.values,
+        );
+      }
+      SystemChrome.setPreferredOrientations(widget.orientationsAfterClose);
     }
     _controller.dispose();
     _showingAspectRatioPicker = false;
@@ -648,8 +669,35 @@ class _ZImageEditorState extends State<ZImageEditor> {
     );
   }
 
+  /// Side margin that keeps handles out of the system gesture areas.
+  double get _gestureSafeMargin {
+    final insets = MediaQuery.of(context).systemGestureInsets;
+    return math.max(24.0, math.max(insets.left, insets.right) + 12);
+  }
+
+  /// Bars over the dark editor in [ZImageEditor.edgeToEdge]: transparent,
+  /// light icons.
+  static const SystemUiOverlayStyle edgeToEdgeStyle = SystemUiOverlayStyle(
+    statusBarColor: Color(0x00000000),
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Color(0x00000000),
+    systemNavigationBarDividerColor: Color(0x00000000),
+    systemNavigationBarIconBrightness: Brightness.light,
+    systemNavigationBarContrastEnforced: false,
+  );
+
   @override
   Widget build(BuildContext context) {
+    final body = _buildBody(context);
+    if (!widget.edgeToEdge || kIsWeb) return body;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: edgeToEdgeStyle,
+      child: body,
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     if (_inFrameStep) {
       final step = _buildFrameStep();
       return kIsWeb ? WebEditorShell(child: step) : step;
@@ -666,17 +714,24 @@ class _ZImageEditorState extends State<ZImageEditor> {
               _buildHeader(context, state),
 
               Expanded(
-                child: ImageCanvas(
-                  imageFile: _currentImageFile,
-                  imageBytes: _currentImageBytes,
-                  controller: _controller,
-                  enableMagnifyingGlass: widget.enableMagnifyingGlass,
-                  portraitOrientation: _isCropPortrait,
-                  showCompare: widget.theme.toolRowTabs &&
-                      _adjustPanel == ZAdjustPanel.auto,
-                  beforeLabel: widget.autoFixLabels.before,
-                  afterLabel: widget.autoFixLabels.after,
-                  fontFamily: widget.theme.fontFamily,
+                child: Padding(
+                  // Edge to edge: crop handles stay out of the system
+                  // back-swipe areas (and at least 24 px in).
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.edgeToEdge ? _gestureSafeMargin : 0,
+                  ),
+                  child: ImageCanvas(
+                    imageFile: _currentImageFile,
+                    imageBytes: _currentImageBytes,
+                    controller: _controller,
+                    enableMagnifyingGlass: widget.enableMagnifyingGlass,
+                    portraitOrientation: _isCropPortrait,
+                    showCompare: widget.theme.toolRowTabs &&
+                        _adjustPanel == ZAdjustPanel.auto,
+                    beforeLabel: widget.autoFixLabels.before,
+                    afterLabel: widget.autoFixLabels.after,
+                    fontFamily: widget.theme.fontFamily,
+                  ),
                 ),
               ),
 
@@ -784,7 +839,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
     // notch spans the full width, hiding buttons at that level. Treat them
     // the same as Android: push buttons below the safe-area with a spacer.
     final hasDynamicIsland = !isAndroid && topPadding >= 50;
-    final useAndroidLayout = isAndroid || !hasDynamicIsland;
+    // The themed look (title in the middle) and edge-to-edge keep every
+    // button below the status bar / Dynamic Island, like the frame step.
+    final safeHeader = widget.edgeToEdge || widget.theme.showTitle;
+    final useAndroidLayout = isAndroid || !hasDynamicIsland || safeHeader;
     return Container(
       color: widget.theme.panelColor,
       child: Column(
@@ -797,9 +855,11 @@ class _ZImageEditorState extends State<ZImageEditor> {
           // visible on either side of the pill.
           if (useAndroidLayout) SizedBox(height: topPadding),
           Container(
-            padding: useAndroidLayout
-                ? const EdgeInsets.symmetric(horizontal: 40, vertical: 20)
-                : const EdgeInsets.symmetric(horizontal: 40),
+            padding: safeHeader
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 6)
+                : useAndroidLayout
+                    ? const EdgeInsets.symmetric(horizontal: 40, vertical: 20)
+                    : const EdgeInsets.symmetric(horizontal: 40),
             height: useAndroidLayout ? null : topPadding,
             child: _buildHeaderButtons(web: false),
           ),

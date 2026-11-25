@@ -567,3 +567,22 @@ re-encodes large photos to WebP (alpha kept), the API stores the uploaded
 bytes unchanged (SkiaSharp only reads the dimensions) and imgproxy serves
 `f:webp` variants. Only JPEG output (and imgproxy's JPEG PDF thumbnails)
 lose alpha, hence `roundFrameFill`.
+
+## 20. Safe Areas
+
+* `ZImageEditor.edgeToEdge` switches the system UI to
+  `SystemUiMode.edgeToEdge` and wraps the editor in an
+  `AnnotatedRegion<SystemUiOverlayStyle>` (transparent bars, light icons);
+  otherwise the legacy behaviour (status bar hidden) stays.
+* Header: `FrameStepHeader` and, with `theme.showTitle` or `edgeToEdge`,
+  the editor header put a `padding.top` spacer above a 44 px button row,
+  so nothing sits beside the Dynamic Island.
+* Bottom panels add `padding.bottom`; sheets use `useSafeArea`.
+* Handles: the frame canvas uses a horizontal padding of
+  `max(theme.canvasPadding, 24, systemGestureInsets.left/right + 12)`;
+  edge to edge, the editor canvas gets the same side margin.
+* The photo hint is capped at 30 % of the screen height (min 132 px); its
+  text scrolls inside, the buttons stay visible.
+* `test/frame/safe_area_test.dart` runs every screen on six phone
+  profiles at text scale 1.3 and checks for overflow, insets and handle
+  margins.

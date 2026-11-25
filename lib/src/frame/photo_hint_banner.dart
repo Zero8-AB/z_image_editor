@@ -136,19 +136,32 @@ class ZPhotoHintBanner extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  labels.title(issue),
-                  key: const Key('z_hint_title'),
-                  style: text(15, t.textColor, FontWeight.w500),
+                // The text scrolls when the banner is height-capped (small
+                // phones, large text); the buttons stay in view.
+                Flexible(
+                  child: SingleChildScrollView(
+                    key: const Key('z_hint_scroll'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          labels.title(issue),
+                          key: const Key('z_hint_title'),
+                          style: text(15, t.textColor, FontWeight.w500),
+                        ),
+                        if (body != null) ...[
+                          const SizedBox(height: 4),
+                          Text(body,
+                              key: const Key('z_hint_body'),
+                              style: text(13, t.hintBodyColor)),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-                if (body != null) ...[
-                  const SizedBox(height: 4),
-                  Text(body,
-                      key: const Key('z_hint_body'),
-                      style: text(13, t.hintBodyColor)),
-                ],
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
