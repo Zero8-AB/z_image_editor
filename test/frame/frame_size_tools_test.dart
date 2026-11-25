@@ -130,8 +130,10 @@ void main() {
 
       for (final (name, known) in const [
         ('another shape (60 × 30)', ZArtworkSize(heightCm: 60, widthCm: 30)),
-        ('height and width swapped (30 × 40)',
-            ZArtworkSize(heightCm: 30, widthCm: 40)),
+        (
+          'height and width swapped (30 × 40)',
+          ZArtworkSize(heightCm: 30, widthCm: 40)
+        ),
       ]) {
         testWidgets('known size of $name: estimate, "≈ … · Check"',
             (tester) async {
