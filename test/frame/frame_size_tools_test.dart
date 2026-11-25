@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:z_image_editor/image_editor.dart';
 import 'package:z_image_editor/src/frame/frame_crop_view.dart';
 import 'package:z_image_editor/src/theme/themed_controls.dart';
@@ -242,5 +244,47 @@ void main() {
     await tester.tap(find.byKey(const Key('z_frame_continue')));
     await settleAsync(tester, 60);
     expect(reported, const ZArtworkSize(heightCm: 40, widthCm: 30, depthCm: 2));
+  });
+
+  testWidgets('reopen → change the size → Next uses the new shape',
+      (tester) async {
+    List<File>? saved;
+    await pumpEditor(
+      tester,
+      ZImageEditor(
+        imageBytesList: [testPng(w: 300, h: 400)],
+        frameDetector: FakeDetector([rect('With frame', 0.1)]),
+        enableSizeTools: true,
+        enableAutoFix: false,
+        theme: sizeTheme,
+        onSaveAll: (f) => saved = f,
+        onCancel: () {},
+      ),
+    );
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    // ‹ Frame, then confirm 70 × 50 (W : H 0.714 instead of 0.75).
+    await tester.tap(find.byKey(const Key('z_editor_cancel')));
+    await settleAsync(tester);
+    await tester.tap(find.byKey(const Key('z_frame_size')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('z_size_preset_70 × 50')));
+    await tester.tap(find.byKey(const Key('z_size_preset_70 × 50')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('z_size_confirm')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('z_frame_continue')));
+    await settleAsync(tester, 60);
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('z_editor_done')));
+      for (var i = 0; i < 60 && saved == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      }
+    });
+    expect(saved, hasLength(1));
+    final out = await tester.runAsync(
+        () async => img.decodeImage(await saved!.single.readAsBytes()));
+    expect(out!.width / out.height, closeTo(50 / 70, 0.01));
   });
 }

@@ -308,6 +308,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
         previous.quarterTurns == result.quarterTurns &&
         previous.enhanceOn == result.enhanceOn &&
         previous.shape == result.shape &&
+        _sameAspect(previous.outputAspectWH, result.outputAspectWH) &&
         _sameCorners(previous.corners, result.corners);
     if (unchanged) {
       setState(() {
@@ -373,6 +374,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
       }
     });
     if (turnOn) _controller.setAutoLevels(fix.values, undoable: false);
+  }
+
+  /// Same output shape (a size changed in the reopened step changes it).
+  static bool _sameAspect(double? a, double? b) {
+    if (a == null || b == null) return a == b;
+    return (a - b).abs() < 1e-6;
   }
 
   static bool _sameCorners(List<Offset> a, List<Offset> b) {
