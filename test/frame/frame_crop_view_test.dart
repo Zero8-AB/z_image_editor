@@ -445,6 +445,67 @@ void main() {
       expect(next(tester).onPressed, isNotNull);
     });
 
+    testWidgets('Next stays disabled until the enhanced image is decoded',
+        (tester) async {
+      final enh = SlowEnhancer();
+      final fixed = testPng(w: 300, h: 400);
+      final h = await pumpFrame(tester,
+          detector: FakeDetector(threeCandidates), enhancer: enh);
+      enh.completer.complete(fixed);
+      // The enhancer is done but its output is not decoded yet.
+      await tester.pump();
+      expect(next(tester).onPressed, isNull);
+      await tester.tap(find.byKey(const Key('z_frame_continue')));
+      await tester.pump();
+      expect(h.result, isNull);
+      await settleAsync(tester, 5);
+      expect(next(tester).onPressed, isNotNull);
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('z_frame_continue')));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
+      await tester.pump();
+      expect(identical(h.warpedSource, fixed), isTrue);
+    });
+
+    testWidgets('reopened: Next waits for the cached enhanced image',
+        (tester) async {
+      final fixed = testPng(w: 300, h: 400);
+      final h = Harness();
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: FrameCropView(
+          imageBytes: testPng(),
+          previous: FrameCropResult(
+            outputBytes: null,
+            corners: threeCandidates[0].corners,
+            candidates: threeCandidates,
+            baseCandidate: 0,
+            enhanceOn: true,
+            enhancerRan: true,
+            enhancedBytes: fixed,
+          ),
+          onCancel: () {},
+          onContinue: (r) => h.result = r,
+          warp: (b, c) async {
+            h.warpedSource = b;
+            return Uint8List.fromList([1]);
+          },
+        ),
+      ));
+      expect(next(tester).onPressed, isNull);
+      await settleAsync(tester, 5);
+      expect(next(tester).onPressed, isNotNull);
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('z_frame_continue')));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
+      await tester.pump();
+      expect(identical(h.warpedSource, fixed), isTrue);
+    });
+
     testWidgets('reopening re-detects when detection had not finished',
         (tester) async {
       final det = FakeDetector(threeCandidates);

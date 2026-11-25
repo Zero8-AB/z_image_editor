@@ -23,6 +23,10 @@ import 'size_sheet.dart';
 /// At most this many outline chips are shown, whatever the detector returns.
 const int kMaxFrameCandidates = 3;
 
+/// How far (relative) a size from the artwork's details may be from the
+/// photo's estimated H : W and still be used as the exact size.
+const double kKnownSizeAspectTolerance = 0.12;
+
 /// What the frame step hands back to the editor.
 class FrameCropResult {
   /// The image to continue editing with, or null to keep the original
@@ -231,6 +235,8 @@ class _FrameCropViewState extends State<FrameCropView> {
   bool _applying = false;
 
   /// Exact size (details, measured or confirmed); null = estimate only.
+  /// A size from the artwork's details is only used while it matches the
+  /// photo's shape: see [_exactSize].
   ZArtworkSize? _size;
 
   /// Photo hint (at most one) and whether the user closed it.
@@ -336,7 +342,10 @@ class _FrameCropViewState extends State<FrameCropView> {
     if (previous != null && previous.enhancerRan) {
       _enhancerRan = true;
       if (previous.enhancedBytes != null) {
-        _useEnhanced(previous.enhancedBytes!);
+        _enhancing = true;
+        _useEnhanced(previous.enhancedBytes!).whenComplete(() {
+          if (mounted) setState(() => _enhancing = false);
+        });
       }
     } else if (widget.enhancer != null) {
       _enhance();
@@ -366,9 +375,26 @@ class _FrameCropViewState extends State<FrameCropView> {
   /// Real height / width of the current outline: the exact size when known,
   /// else a perspective estimate (focal length from EXIF, or solved), else
   /// the average side lengths.
-  double? get _aspectHW {
-    final exact = _size;
-    if (exact != null) return exact.aspectHW;
+  double? get _aspectHW => _exactSize?.aspectHW ?? _estimatedAspectHW;
+
+  /// The exact size to use for the current outline. A size from the
+  /// artwork's details is a hint, not a measurement of this photo: it is
+  /// used only when its H : W is within [kKnownSizeAspectTolerance] of the
+  /// photo's estimate (a swapped height and width is a mismatch); otherwise
+  /// the step falls back to the estimate ("≈ … · Check").
+  ZArtworkSize? get _exactSize {
+    final s = _size;
+    if (s == null || s.source != ZSizeSource.details) return s;
+    final estimate = _estimatedAspectHW;
+    if (estimate == null) return null;
+    final ratio = s.aspectHW / estimate;
+    final diff = ratio >= 1 ? ratio - 1 : 1 / ratio - 1;
+    return diff <= kKnownSizeAspectTolerance ? s : null;
+  }
+
+  /// Real height / width of the current outline estimated from the photo
+  /// alone (ignores any size): the size sheet's "Estimated shape".
+  double? get _estimatedAspectHW {
     // A round frame is a circle, however the photo was taken.
     if (_shape == ZFrameShape.round) return 1;
     final image = _image;
@@ -393,8 +419,9 @@ class _FrameCropViewState extends State<FrameCropView> {
 
   /// The size to show: exact, or the best-fitting common size (≈).
   ZArtworkSize? get _shownSize {
-    if (_size != null) return _size;
-    final aspect = _aspectHW;
+    final exact = _exactSize;
+    if (exact != null) return exact;
+    final aspect = _estimatedAspectHW;
     if (aspect == null) return null;
     final fit = ZCommonSizes.bestFit(aspect);
     if (fit == null) return null;
@@ -418,7 +445,7 @@ class _FrameCropViewState extends State<FrameCropView> {
       context,
       theme: _theme,
       labels: widget.sizeLabels,
-      estimatedAspectHW: _aspectHW,
+      estimatedAspectHW: _estimatedAspectHW,
       initial: _shownSize,
     );
     if (!mounted || result == null) return;
@@ -468,11 +495,14 @@ class _FrameCropViewState extends State<FrameCropView> {
       fixed = null;
     }
     if (!mounted) return;
+    // Stay busy until the fixed image is decoded and usable, so Next can't
+    // run in between and drop the enhancement.
+    if (fixed != null) await _useEnhanced(fixed);
+    if (!mounted) return;
     setState(() {
       _enhancing = false;
       _enhancerRan = true;
     });
-    if (fixed != null) await _useEnhanced(fixed);
   }
 
   Future<void> _useEnhanced(Uint8List bytes) async {
@@ -579,11 +609,12 @@ class _FrameCropViewState extends State<FrameCropView> {
     final shape = _shape;
     final ellipse = shape != ZFrameShape.rectangle;
     final aspectHW =
-        widget.sizeTools || _size != null || ellipse ? _aspectHW : null;
+        widget.sizeTools || _exactSize != null || ellipse ? _aspectHW : null;
+    final exactSize = _exactSize;
     final aspectWH = aspectHW == null ? null : 1 / aspectHW;
     final fill = widget.outsideFill?.toARGB32();
     FrameCropResult result(Uint8List? out) => FrameCropResult(
-          size: _size,
+          size: exactSize,
           outputAspectWH: out == null ? null : aspectWH,
           outputBytes: out,
           corners: corners,
@@ -715,12 +746,12 @@ class _FrameCropViewState extends State<FrameCropView> {
                       ZToolButton(
                         key: const Key('z_frame_size'),
                         theme: _theme,
-                        icon: _size != null
+                        icon: _exactSize != null
                             ? ZLineIconKind.sizeConfirmed
                             : ZLineIconKind.sizeEstimated,
                         label: _sizeButtonLabel,
-                        active: _size != null,
-                        toggled: _size != null,
+                        active: _exactSize != null,
+                        toggled: _exactSize != null,
                         onTap:
                             _applying || _image == null ? null : _openSizeSheet,
                       ),

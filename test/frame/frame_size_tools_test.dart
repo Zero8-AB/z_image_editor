@@ -110,18 +110,66 @@ void main() {
 
       testWidgets('known size: no ≈, and Next gives it the real shape',
           (tester) async {
+        // A3 (42 × 30, H : W 1.4) is within 12 % of the 4 : 3 outline.
         final h = await pumpSizeStep(tester, size,
             known: const ZArtworkSize(
-                heightCm: 60, widthCm: 30, source: ZSizeSource.details));
-        expect(sizeButton(tester).label, '60 × 30 cm');
-        expect(label(tester, 'z_frame_height_label'), '60 cm');
+                heightCm: 42, widthCm: 30, source: ZSizeSource.details));
+        expect(sizeButton(tester).label, '42 × 30 cm');
+        expect(sizeButton(tester).icon, ZLineIconKind.sizeConfirmed);
+        expect(label(tester, 'z_frame_height_label'), '42 cm');
         await tester.runAsync(() async {
           await tester.tap(find.byKey(const Key('z_frame_continue')));
           await Future<void>.delayed(const Duration(milliseconds: 20));
         });
         await tester.pump();
-        expect(h.result!.outputAspectWH, closeTo(0.5, 1e-9));
+        expect(h.result!.outputAspectWH, closeTo(30 / 42, 1e-9));
         expect(h.result!.size!.source, ZSizeSource.details);
+      });
+
+      for (final (name, known) in const [
+        ('another shape (60 × 30)', ZArtworkSize(heightCm: 60, widthCm: 30)),
+        ('height and width swapped (30 × 40)',
+            ZArtworkSize(heightCm: 30, widthCm: 40)),
+      ]) {
+        testWidgets('known size of $name: estimate, "≈ … · Check"',
+            (tester) async {
+          final h = await pumpSizeStep(tester, size,
+              known: ZArtworkSize(
+                  heightCm: known.heightCm,
+                  widthCm: known.widthCm,
+                  source: ZSizeSource.details));
+          final b = sizeButton(tester);
+          expect(b.label, '≈ 40 × 30 cm · Check');
+          expect(b.icon, ZLineIconKind.sizeEstimated);
+          expect(b.active, isFalse);
+          expect(label(tester, 'z_frame_height_label'), '≈ 40 cm');
+          await tester.runAsync(() async {
+            await tester.tap(find.byKey(const Key('z_frame_continue')));
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+          });
+          await tester.pump();
+          // The photo's shape, not the details' size.
+          expect(h.result!.outputAspectWH, closeTo(0.75, 0.01));
+          expect(h.result!.size, isNull);
+        });
+      }
+
+      testWidgets('the sheet shows the photo’s estimate after a confirm',
+          (tester) async {
+        await pumpSizeStep(tester, size);
+        await tester.tap(find.byKey(const Key('z_frame_size')));
+        await tester.pumpAndSettle();
+        await tester
+            .ensureVisible(find.byKey(const Key('z_size_preset_50 × 40')));
+        await tester.tap(find.byKey(const Key('z_size_preset_50 × 40')));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('z_size_confirm')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('z_frame_size')));
+        await tester.pumpAndSettle();
+        // 4 : 3 from the outline, not 5 : 4 from the confirmed 50 × 40.
+        expect(find.textContaining('about 4 : 3 (H : W)', findRichText: true),
+            findsOneWidget);
       });
 
       testWidgets('no matching size: "Size · Check" and no lines',

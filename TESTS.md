@@ -28,7 +28,9 @@ screens: see `TESTS.md` in the Monogram app.
 | 2 | No reflections toggle | `frame_step_design_test` › No reflections toggle is red when on, tap compares; `frame_crop_view_test` › enhancer toggle group |
 | 2 | Tool buttons ≥ 44 px | `frame_step_design_test` › tool buttons are at least 44 px tall |
 | 2 | Next / Cancel | `frame_step_design_test` › Next and Cancel; `frame_crop_view_test` › Continue warps…, Cancel calls onCancel, Next is disabled and busy while the detector runs |
+| 2 | Next waits for the enhanced image (decoded, also when reopened) | `frame_crop_view_test` › Next stays disabled until the enhanced image is decoded; reopened: Next waits for the cached enhanced image |
 | 3 | Size tool label (≈ … · Check / exact) | `frame/frame_size_tools_test.dart` › estimated: "≈ … · Check" and ≈ lines, known size: no ≈…, no matching size: "Size · Check" |
+| 3, 5 | Details size used only when its H : W is within 12 % of the outline's estimate; another shape or swapped H/W falls back to "≈ … · Check" | `frame_size_tools_test` › known size: no ≈… (A3 vs 4 : 3); known size of another shape (60 × 30) / height and width swapped (30 × 40): estimate, "≈ … · Check" |
 | 3 | Measurement lines (≈ vs confirmed), inside the screen | `frame_size_tools_test` › estimated…, Size opens the sheet; Confirm locks the size, lines stay inside the screen for a full-width outline |
 | 3 | Lines on a small outline (label only, scaled) | `frame/measurement_lines_test.dart` › a large outline…; an outline shorter than its label: label only, scaled down |
 | 5 | Right shape (perspective + EXIF focal) | `frame/rect_aspect_test.dart` (all); `frame_size_tools_test` › known size: … Next gives it the real shape; `artwork_size_test` › warpOutputSize keeps the real shape when given |
@@ -61,6 +63,7 @@ screens: see `TESTS.md` in the Monogram app.
 | 6 | Keyboard state | `size_sheet_test` › keyboard open: Confirm pinned above it…; `safe_area_test` › size sheet: Confirm above the home bar and the keyboard |
 | 6 | Known size, small phone scroll | `size_sheet_test` › known size: fields filled, depth kept; the sheet scrolls on a small phone |
 | 6 | Confirmed size reported | `frame_size_tools_test` › editor reports a confirmed size after Next |
+| 6 | "Estimated shape" is the photo's, not the confirmed size's | `frame_size_tools_test` › the sheet shows the photo’s estimate after a confirm |
 
 ## Tip sheet ("Photograph your artwork")
 
