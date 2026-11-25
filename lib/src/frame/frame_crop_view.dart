@@ -857,7 +857,7 @@ class _FrameCropViewState extends State<FrameCropView> {
                         key: const Key('z_frame_retake'),
                         theme: _theme,
                         icon: ZLineIconKind.camera,
-                        label: labels.retake,
+                        label: labels.retakeLabel,
                         onTap: _applying ? null : widget.onRetake,
                       ),
                   ],

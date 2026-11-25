@@ -77,9 +77,10 @@ void main() {
     expect(retakes, 1);
   });
 
-  testWidgets('the label comes from ZFrameCropLabels.retake', (tester) async {
+  testWidgets('the label comes from ZFrameCropLabels.retakeLabel',
+      (tester) async {
     await pumpFrame(tester,
-        onRetake: () {}, labels: const ZFrameCropLabels(retake: 'Ta om'));
+        onRetake: () {}, labels: const ZFrameCropLabels(retakeLabel: 'Ta om'));
     expect(
         find.descendant(
             of: find.byKey(retakeKey), matching: find.text('Ta om')),

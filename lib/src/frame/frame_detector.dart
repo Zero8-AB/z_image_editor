@@ -224,7 +224,7 @@ class ZFrameCropLabels {
 
   /// Tool that closes the frame step to take a new photo (shown only when
   /// the editor has an `onRetake`).
-  final String retake;
+  final String retakeLabel;
 
   /// Appended to the selected chip once its corners were dragged.
   final String editedSuffix;
@@ -268,7 +268,7 @@ class ZFrameCropLabels {
     this.backToFrameLabel = 'Frame',
     this.fullPhotoLabel = 'Full photo',
     this.rotateLabel = 'Rotate',
-    this.retake = 'Retake',
+    this.retakeLabel = 'Retake',
     this.editedSuffix = ' · edited',
     this.detectingLabel = 'Finding the edges…',
     this.manualHint = 'Drag the corners to the edges you want to keep.',
