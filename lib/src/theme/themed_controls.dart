@@ -14,6 +14,31 @@ enum ZLineIconKind {
   crop,
   adjust,
   back,
+
+  /// Size not confirmed yet: dashed rectangle.
+  sizeEstimated,
+
+  /// Size confirmed or measured: rectangle with a lock.
+  sizeConfirmed,
+  close,
+  check,
+  auto,
+  compare,
+  circle,
+  oval,
+}
+
+/// Draws [path] dashed ([dash] on, [gap] off).
+void drawDashedPath(Canvas canvas, Path path, Paint paint,
+    {double dash = 3, double gap = 2}) {
+  for (final metric in path.computeMetrics()) {
+    var d = 0.0;
+    while (d < metric.length) {
+      final next = math.min(d + dash, metric.length);
+      canvas.drawPath(metric.extractPath(d, next), paint);
+      d = next + gap;
+    }
+  }
 }
 
 class ZLineIcon extends StatelessWidget {
@@ -123,6 +148,74 @@ class _LineIconPainter extends CustomPainter {
             ..lineTo(15, 19),
           p,
         );
+      case ZLineIconKind.sizeEstimated:
+        drawDashedPath(
+            canvas, Path()..addRect(const Rect.fromLTWH(5, 3, 14, 18)), p);
+      case ZLineIconKind.sizeConfirmed:
+        canvas.drawRect(const Rect.fromLTWH(5, 3, 14, 18), p);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              const Rect.fromLTWH(9, 10, 6, 5), const Radius.circular(1)),
+          p,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(10, 10)
+            ..lineTo(10, 8.5)
+            ..arcToPoint(const Offset(14, 8.5),
+                radius: const Radius.circular(2))
+            ..lineTo(14, 10),
+          p,
+        );
+      case ZLineIconKind.close:
+        line(6, 6, 18, 18);
+        line(18, 6, 6, 18);
+      case ZLineIconKind.check:
+        canvas.drawPath(
+          Path()
+            ..moveTo(5, 12)
+            ..lineTo(10, 17)
+            ..lineTo(19, 7),
+          p,
+        );
+      case ZLineIconKind.auto:
+        canvas.drawPath(
+          Path()
+            ..moveTo(12, 3)
+            ..lineTo(13.8, 7.2)
+            ..lineTo(18, 9)
+            ..lineTo(13.8, 10.8)
+            ..lineTo(12, 15)
+            ..lineTo(10.2, 10.8)
+            ..lineTo(6, 9)
+            ..lineTo(10.2, 7.2)
+            ..close()
+            ..moveTo(18, 15)
+            ..lineTo(18.8, 16.7)
+            ..lineTo(20.5, 17.5)
+            ..lineTo(18.8, 18.3)
+            ..lineTo(18, 20)
+            ..lineTo(17.2, 18.3)
+            ..lineTo(15.5, 17.5)
+            ..lineTo(17.2, 16.7)
+            ..close(),
+          p,
+        );
+      case ZLineIconKind.compare:
+        canvas.drawPath(
+          Path()
+            ..moveTo(9, 7)
+            ..lineTo(4, 12)
+            ..lineTo(9, 17)
+            ..moveTo(15, 7)
+            ..lineTo(20, 12)
+            ..lineTo(15, 17),
+          p,
+        );
+      case ZLineIconKind.circle:
+        canvas.drawCircle(const Offset(12, 12), 8, p);
+      case ZLineIconKind.oval:
+        canvas.drawOval(const Rect.fromLTWH(3, 6, 18, 12), p);
     }
   }
 
@@ -183,8 +276,11 @@ class ZToolButton extends StatelessWidget {
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  label,
-                  maxLines: 1,
+                  label.contains(' · ')
+                      ? label.replaceFirst(' · ', '\n· ')
+                      : label,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
                   style: theme.text(
                     color: color,
                     fontSize: theme.toolLabelFontSize,
@@ -222,25 +318,35 @@ class ZChip extends StatelessWidget {
       button: true,
       selected: selected,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
-          height: theme.chipHeight,
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: selected ? theme.chipSelectedColor : null,
-            borderRadius: BorderRadius.circular(theme.chipHeight),
-            border: Border.all(
-              color: selected ? theme.chipSelectedColor : theme.chipBorderColor,
-            ),
-          ),
-          child: Text(
-            label,
-            style: theme.text(
-              color:
-                  selected ? theme.chipSelectedTextColor : theme.chipTextColor,
-              fontSize: theme.chipFontSize,
-              fontWeight: selected ? FontWeight.w500 : FontWeight.normal,
+        child: SizedBox(
+          height: math.max(theme.chipTapHeight, theme.chipHeight),
+          child: Center(
+            child: Container(
+              height: theme.chipHeight,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: selected ? theme.chipSelectedColor : null,
+                borderRadius: BorderRadius.circular(theme.chipHeight),
+                border: Border.all(
+                  color: selected
+                      ? theme.chipSelectedColor
+                      : theme.chipBorderColor,
+                ),
+              ),
+              child: Text(
+                label,
+                style: theme.text(
+                  color: selected
+                      ? theme.chipSelectedTextColor
+                      : theme.chipTextColor,
+                  fontSize: theme.chipFontSize,
+                  fontWeight: selected ? FontWeight.w500 : FontWeight.normal,
+                ),
+                maxLines: 1,
+              ),
             ),
           ),
         ),

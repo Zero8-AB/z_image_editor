@@ -437,14 +437,14 @@ class _FrameCropViewState extends State<FrameCropView> {
           Container(
             color: _theme.panelColor,
             padding: EdgeInsets.only(
-              top: 12,
+              top: 4,
               bottom: 8 + MediaQuery.of(context).padding.bottom,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  height: math.max(_theme.chipHeight, 36),
+                  height: math.max(_theme.chipTapHeight, _theme.chipHeight),
                   child: _buildChips(labels),
                 ),
                 const SizedBox(height: 12),
@@ -587,6 +587,15 @@ class _FrameCropViewState extends State<FrameCropView> {
             ),
         ];
         final hit = _theme.handleHitSize;
+        Offset toScreen(Offset c) => Offset(
+              fitted.left + c.dx * fitted.width,
+              fitted.top + c.dy * fitted.height,
+            );
+        final alternatives = [
+          for (var i = 0; i < _candidates.length; i++)
+            if (i != _base || _edited)
+              [for (final c in _candidateCorners(i)) toScreen(c)],
+        ];
 
         return Stack(
           key: const Key('z_frame_canvas'),
@@ -603,6 +612,7 @@ class _FrameCropViewState extends State<FrameCropView> {
                     quarterTurns: _turns,
                     fitted: fitted,
                     quad: pts,
+                    alternatives: alternatives,
                     dragging: _dragCorner != null,
                     theme: _theme,
                   ),
@@ -798,12 +808,18 @@ class FrameCornerHandle extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: theme.handleColor,
+            border: theme.handleRingColor == null
+                ? null
+                : Border.all(
+                    color: theme.handleRingColor!,
+                    width: theme.handleRingWidth,
+                  ),
             boxShadow: [
               if (active)
                 BoxShadow(color: theme.handleHaloColor, spreadRadius: 6)
               else
                 const BoxShadow(
-                  color: Color(0x80000000),
+                  color: Color(0x66000000),
                   blurRadius: 4,
                   offset: Offset(0, 1),
                 ),
@@ -842,6 +858,9 @@ class FrameQuadPainter extends CustomPainter {
   final int quarterTurns;
   final Rect fitted;
   final List<Offset> quad;
+
+  /// The other detected outlines (screen coordinates), drawn dashed.
+  final List<List<Offset>> alternatives;
   final bool dragging;
   final ZImageEditorTheme theme;
 
@@ -850,6 +869,7 @@ class FrameQuadPainter extends CustomPainter {
     required this.quarterTurns,
     required this.fitted,
     required this.quad,
+    this.alternatives = const [],
     required this.dragging,
     required this.theme,
   });
@@ -884,6 +904,18 @@ class FrameQuadPainter extends CustomPainter {
       }
     }
 
+    final altColor = theme.alternativeOutlineColor;
+    if (altColor != null) {
+      final alt = Paint()
+        ..color = altColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = theme.alternativeOutlineWidth;
+      for (final q in alternatives) {
+        drawDashedPath(canvas, Path()..addPolygon(q, true), alt,
+            dash: 4, gap: 3);
+      }
+    }
+
     canvas.drawPath(
       quadPath,
       Paint()
@@ -895,6 +927,7 @@ class FrameQuadPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(FrameQuadPainter old) =>
+      old.alternatives.length != alternatives.length ||
       old.image != image ||
       old.quarterTurns != quarterTurns ||
       old.fitted != fitted ||
