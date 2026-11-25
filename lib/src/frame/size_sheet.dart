@@ -15,6 +15,10 @@ class ZSizeSheetLabels {
   final String noMatchHint;
   final String commonSizes;
   final String dimensions;
+
+  /// Heading of the fields when the size is for an outline inside the
+  /// frame (the mat window, the artwork).
+  final String dimensionsWithoutFrame;
   final String height;
   final String width;
   final String depth;
@@ -38,6 +42,7 @@ class ZSizeSheetLabels {
         'No common size has this shape. Enter one side, and we fill in the other.',
     this.commonSizes = 'Common sizes, height × width (cm)',
     this.dimensions = 'Dimensions, including frame (cm)',
+    this.dimensionsWithoutFrame = 'Dimensions, without frame (cm)',
     this.height = 'Height',
     this.width = 'Width',
     this.depth = 'Depth',
@@ -64,6 +69,7 @@ Future<ZArtworkSize?> showZArtworkSizeSheet(
   ZSizeSheetLabels labels = const ZSizeSheetLabels(),
   double? estimatedAspectHW,
   ZArtworkSize? initial,
+  bool includesFrame = true,
 }) {
   return showModalBottomSheet<ZArtworkSize>(
     context: context,
@@ -76,6 +82,7 @@ Future<ZArtworkSize?> showZArtworkSizeSheet(
       labels: labels,
       estimatedAspectHW: estimatedAspectHW,
       initial: initial,
+      includesFrame: includesFrame,
       onConfirm: (s) => Navigator.of(context).pop(s),
       onKeepEstimate: () => Navigator.of(context).pop(),
     ),
@@ -91,6 +98,10 @@ class ZArtworkSizeSheet extends StatefulWidget {
   /// Height / width of the photographed outline (null = unknown).
   final double? estimatedAspectHW;
   final ZArtworkSize? initial;
+
+  /// Whether the size is for the outermost outline (the fields are headed
+  /// "including frame") or for one inside the frame ("without frame").
+  final bool includesFrame;
   final ValueChanged<ZArtworkSize> onConfirm;
   final VoidCallback onKeepEstimate;
 
@@ -100,6 +111,7 @@ class ZArtworkSizeSheet extends StatefulWidget {
     this.labels = const ZSizeSheetLabels(),
     this.estimatedAspectHW,
     this.initial,
+    this.includesFrame = true,
     required this.onConfirm,
     required this.onKeepEstimate,
   });
@@ -387,7 +399,8 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       key: _fieldsKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading(l.dimensions, key: const Key('z_size_dimensions')),
+        _heading(widget.includesFrame ? l.dimensions : l.dimensionsWithoutFrame,
+            key: const Key('z_size_dimensions')),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,

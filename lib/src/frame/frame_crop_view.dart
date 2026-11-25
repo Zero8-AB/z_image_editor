@@ -75,6 +75,10 @@ class FrameCropResult {
   final ZArtworkSize? anchorSize;
   final List<Offset>? anchorCorners;
 
+  /// The chip [anchorSize] was given on (null: a hand-made outline or the
+  /// full photo).
+  final int? anchorCandidate;
+
   /// The size the step showed on Next: [size] when exact, else the "≈"
   /// estimate (source [ZSizeSource.estimated]); null when none was shown
   /// (no size tools, or no outline to estimate from).
@@ -109,6 +113,7 @@ class FrameCropResult {
     this.size,
     this.anchorSize,
     this.anchorCorners,
+    this.anchorCandidate,
     this.shownSize,
     this.outputAspectWH,
     required this.outputBytes,
@@ -282,6 +287,11 @@ class _FrameCropViewState extends State<FrameCropView> {
   /// from this one ("≈"): see [_shownSize].
   List<Offset>? _sizeCorners;
 
+  /// The chip [_sizeCorners] belongs to ([_manualShapeKey]: hand-made or
+  /// the full photo): that chip keeps the size however its outline is
+  /// dragged or reset.
+  int _sizeBase = _manualShapeKey;
+
   /// A measured size arrives before the outlines: it is tied to the
   /// pre-selected one (what the camera measured) once they are known.
   bool _tieMeasuredSize = false;
@@ -384,6 +394,7 @@ class _FrameCropViewState extends State<FrameCropView> {
       if (previous.anchorSize != null && previous.anchorCorners != null) {
         _size = previous.anchorSize;
         _sizeCorners = List.of(previous.anchorCorners!);
+        _sizeBase = previous.anchorCandidate ?? _manualShapeKey;
       } else {
         _size = previous.size;
       }
@@ -443,26 +454,76 @@ class _FrameCropViewState extends State<FrameCropView> {
   /// the average side lengths.
   double? get _aspectHW => _exactSize?.aspectHW ?? _estimatedAspectHW;
 
-  /// The exact size to use for the current outline. A size from the
-  /// artwork's details is a hint, not a measurement of this photo: it is
-  /// used only when its H : W is within [kKnownSizeAspectTolerance] of the
-  /// photo's estimate (a swapped height and width is a mismatch); otherwise
-  /// the step falls back to the estimate ("≈ … · Check").
+  /// Whether the current outline is the one [_size] was confirmed or
+  /// measured for: its chip (however dragged), or, for a hand-made outline
+  /// and the full photo, the very same corners.
+  bool get _onTiedOutline {
+    final tied = _sizeCorners;
+    if (tied == null || (_base ?? _manualShapeKey) != _sizeBase) return false;
+    return _base != null || ZQuadMath.isSame(_corners, tied);
+  }
+
+  /// After the outline changed: the tied chip's outline is wherever that
+  /// chip's outline now is.
+  void _keepTie() {
+    if (_sizeCorners != null && _base != null && _base == _sizeBase) {
+      _sizeCorners = List.of(_corners);
+    }
+  }
+
+  /// Whether a size from the artwork's details has the shape [aspectHW]:
+  /// within [kKnownSizeAspectTolerance] (a swapped height and width is a
+  /// mismatch).
+  bool _detailsFit(ZArtworkSize s, double? aspectHW) {
+    if (aspectHW == null) return false;
+    final ratio = s.aspectHW / aspectHW;
+    final diff = ratio >= 1 ? ratio - 1 : 1 / ratio - 1;
+    return diff <= kKnownSizeAspectTolerance;
+  }
+
+  /// The one outline whose size is known, and that size: every other
+  /// outline nested with it is measured against it, so whatever the size's
+  /// source an inner outline is never larger than the one around it.
   ///
-  /// A confirmed or measured size is exact only on the outline it was given
-  /// for ([_sizeCorners]).
-  ZArtworkSize? get _exactSize {
+  /// - Confirmed in the sheet, or measured: the outline it was given for.
+  /// - From the artwork's details (a hint, not a measurement of this
+  ///   photo): the outermost outline whose shape it has, the detector's
+  ///   first, then the current one; none when no shape fits (the step then
+  ///   shows estimates only, "≈ … · Check").
+  /// - A size that was never tied to an outline (given by the app when no
+  ///   outline was found): the current outline, whichever it is.
+  ({List<Offset> corners, ZArtworkSize size})? get _reference {
     final s = _size;
     if (s == null) return null;
     if (s.source != ZSizeSource.details) {
       final tied = _sizeCorners;
-      return tied == null || ZQuadMath.isSame(_corners, tied) ? s : null;
+      return (
+        corners: tied == null || _onTiedOutline ? _corners : tied,
+        size: s,
+      );
     }
-    final estimate = _estimatedAspectHW;
-    if (estimate == null) return null;
-    final ratio = s.aspectHW / estimate;
-    final diff = ratio >= 1 ? ratio - 1 : 1 / ratio - 1;
-    return diff <= kKnownSizeAspectTolerance ? s : null;
+    final byArea = [for (var i = 0; i < _candidates.length; i++) i]..sort(
+        (a, b) => ZQuadMath.area(_candidates[b].corners)
+            .compareTo(ZQuadMath.area(_candidates[a].corners)));
+    for (final i in byArea) {
+      if (i == _base) {
+        if (_detailsFit(s, _estimatedAspectHW)) {
+          return (corners: _corners, size: s);
+        }
+      } else if (_detailsFit(s, _candidateAspectHW(i))) {
+        return (corners: _candidateCorners(i), size: s);
+      }
+    }
+    return _base == null && _detailsFit(s, _estimatedAspectHW)
+        ? (corners: _corners, size: s)
+        : null;
+  }
+
+  /// The exact size of the current outline: the known size when this is
+  /// the outline it belongs to ([_reference]); null = estimate only.
+  ZArtworkSize? get _exactSize {
+    final r = _reference;
+    return r != null && ZQuadMath.isSame(_corners, r.corners) ? r.size : null;
   }
 
   /// Real height / width of the current outline estimated from the photo
@@ -500,7 +561,14 @@ class _FrameCropViewState extends State<FrameCropView> {
   }
 
   final _currentAspect = _AspectMemo();
-  final _outerAspect = _AspectMemo();
+  final _candidateAspects = <int, _AspectMemo>{};
+
+  /// Real height / width of the detector's outline [i] (as detected).
+  double? _candidateAspectHW(int i) => _outlineAspectHW(
+        _candidateAspects.putIfAbsent(i, _AspectMemo.new),
+        _candidateCorners(i),
+        _shapeOverrides[i] ?? _candidates[i].shape,
+      );
 
   double? _solveAspectHW(ui.Image image, List<Offset> corners) {
     final imgSize = Size(image.width.toDouble(), image.height.toDouble());
@@ -535,36 +603,45 @@ class _FrameCropViewState extends State<FrameCropView> {
     return outer;
   }
 
+  /// Whether the current outline lies inside the detector's outermost
+  /// one (and is not that outline): it is then a level without the frame.
+  bool get _insideOuter {
+    final outer = _outerCandidate;
+    return outer != null &&
+        _base != outer &&
+        !_isFullPhoto &&
+        ZQuadMath.isInside(_corners, _candidateCorners(outer),
+            tolerance: _nestTolerance);
+  }
+
   /// The size to show: exact, or an estimate ("≈").
   ///
-  /// A photo has no scale, so only one outline of an object gets its size
-  /// from the common sizes; every outline nested with it (frame, mat
-  /// window, artwork) is measured against that one on the straightened
-  /// plane. The reference is the outline a size was confirmed or measured
-  /// for, else the detector's outermost outline. So an inner level is
-  /// never larger than the level around it.
+  /// A photo has no scale, so only one outline of an object gets a size of
+  /// its own: the one a size is known for ([_reference]), else the
+  /// detector's outermost outline, from the common sizes. Every outline
+  /// nested with it (frame, mat window, artwork) is measured against it on
+  /// the straightened plane. So an inner level is never larger than the
+  /// level around it.
   ZArtworkSize? get _shownSize {
     final exact = _exactSize;
     if (exact != null) return exact;
 
-    final s = _size, tied = _sizeCorners;
-    if (s != null && tied != null && s.source != ZSizeSource.details) {
-      final derived = _sizeFrom(tied, s.heightCm, s.widthCm);
+    // The full photo is not a level of the object: no reference.
+    var ref = _reference;
+    if (ref != null && ZQuadMath.isFullImage(ref.corners)) ref = null;
+    if (ref != null) {
+      final derived = _derivedSize(
+          _corners, _shape, ref.corners, ref.size.heightCm, ref.size.widthCm);
       if (derived != null) return derived;
     }
 
-    final outer = _outerCandidate;
-    if (outer != null && _base != outer) {
+    if (_insideOuter) {
+      final outer = _outerCandidate!;
       final corners = _candidateCorners(outer);
-      final aspect = _outlineAspectHW(
-        _outerAspect,
-        corners,
-        _shapeOverrides[outer] ?? _candidates[outer].shape,
-      );
-      if (aspect != null &&
-          ZQuadMath.isInside(_corners, corners, tolerance: _nestTolerance)) {
-        final whole = ZCommonSizes.estimate(aspect);
-        final derived = _sizeFrom(corners, whole.heightCm, whole.widthCm);
+      final whole = _outerSize(outer, corners, ref);
+      if (whole != null) {
+        final derived = _derivedSize(
+            _corners, _shape, corners, whole.heightCm, whole.widthCm);
         if (derived != null) return derived;
       }
     }
@@ -573,46 +650,72 @@ class _FrameCropViewState extends State<FrameCropView> {
     return aspect == null ? null : ZCommonSizes.estimate(aspect);
   }
 
+  /// The size of the detector's outermost outline: the known size when it
+  /// is the reference, else measured against the reference, else from the
+  /// common sizes.
+  ZArtworkSize? _outerSize(
+    int outer,
+    List<Offset> corners,
+    ({List<Offset> corners, ZArtworkSize size})? ref,
+  ) {
+    if (ref != null) {
+      if (ZQuadMath.isSame(corners, ref.corners)) return ref.size;
+      final derived = _derivedSize(
+        corners,
+        _shapeOverrides[outer] ?? _candidates[outer].shape,
+        ref.corners,
+        ref.size.heightCm,
+        ref.size.widthCm,
+      );
+      if (derived != null) return derived;
+    }
+    final aspect = _candidateAspectHW(outer);
+    return aspect == null ? null : ZCommonSizes.estimate(aspect);
+  }
+
   /// How far (normalized) an outline may poke out of the one around it and
   /// still count as nested.
   static const double _nestTolerance = 0.01;
 
-  /// The current outline's size from [reference] (turned view), an outline
-  /// of [heightCm] × [widthCm] that it lies inside or around; whole
+  /// The size of [quad] (turned view) from [reference], an outline of
+  /// [heightCm] × [widthCm] that it lies inside or around; whole
   /// centimetres. Null when the two are not nested (or for the full
   /// photo, which is not a level of the object).
-  ZArtworkSize? _sizeFrom(
+  ZArtworkSize? _derivedSize(
+    List<Offset> quad,
+    ZFrameShape shape,
     List<Offset> reference,
     double heightCm,
     double widthCm,
   ) {
-    if (_isFullPhoto) return null;
+    if (ZQuadMath.isFullImage(quad)) return null;
     final inner =
-        ZQuadMath.isInside(_corners, reference, tolerance: _nestTolerance);
+        ZQuadMath.isInside(quad, reference, tolerance: _nestTolerance);
     if (!inner &&
-        !ZQuadMath.isInside(reference, _corners, tolerance: _nestTolerance)) {
+        !ZQuadMath.isInside(reference, quad, tolerance: _nestTolerance)) {
       return null;
     }
     final size = ZRectAspect.sizeOnPlane(
       reference: reference,
       referenceHeight: heightCm,
       referenceWidth: widthCm,
-      quad: _corners,
+      quad: quad,
     );
     if (size == null) return null;
-    var h = math.max(1.0, size.height.roundToDouble());
-    var w = math.max(1.0, size.width.roundToDouble());
-    // A round outline is a circle: one diameter.
-    if (_shape == ZFrameShape.round) {
-      h = w = math.max(1.0, ((size.height + size.width) / 2).roundToDouble());
-    }
+    double h, w;
     // Rounding (and the tolerance) must not turn the order around.
-    if (inner) {
-      h = math.min(h, heightCm);
-      w = math.min(w, widthCm);
+    if (shape == ZFrameShape.round) {
+      // A round outline is a circle: one diameter, also when capped.
+      var d = math.max(1.0, ((size.height + size.width) / 2).roundToDouble());
+      d = inner
+          ? math.min(d, math.min(heightCm, widthCm))
+          : math.max(d, math.max(heightCm, widthCm));
+      h = w = d;
     } else {
-      h = math.max(h, heightCm);
-      w = math.max(w, widthCm);
+      h = math.max(1.0, size.height.roundToDouble());
+      w = math.max(1.0, size.width.roundToDouble());
+      h = inner ? math.min(h, heightCm) : math.max(h, heightCm);
+      w = inner ? math.min(w, widthCm) : math.max(w, widthCm);
     }
     return ZArtworkSize(
       heightCm: h,
@@ -636,11 +739,13 @@ class _FrameCropViewState extends State<FrameCropView> {
       labels: widget.sizeLabels,
       estimatedAspectHW: _estimatedAspectHW,
       initial: _shownSize,
+      includesFrame: !_insideOuter,
     );
     if (!mounted || result == null) return;
     setState(() {
       _size = result;
       _sizeCorners = List.of(_corners);
+      _sizeBase = _base ?? _manualShapeKey;
     });
   }
 
@@ -739,6 +844,7 @@ class _FrameCropViewState extends State<FrameCropView> {
     if (_tieMeasuredSize && _defaultBase != null) {
       _tieMeasuredSize = false;
       _sizeCorners = _candidateCorners(_defaultBase!);
+      _sizeBase = _defaultBase!;
     }
   }
 
@@ -748,6 +854,7 @@ class _FrameCropViewState extends State<FrameCropView> {
       _base = index;
       _edited = false;
       _corners = index == null ? ZQuadMath.fullImage : _candidateCorners(index);
+      _keepTie();
     });
   }
 
@@ -782,6 +889,7 @@ class _FrameCropViewState extends State<FrameCropView> {
       _edited = false;
       _corners =
           _base == null ? ZQuadMath.fullImage : _candidateCorners(_base!);
+      _keepTie();
     });
   }
 
@@ -800,8 +908,7 @@ class _FrameCropViewState extends State<FrameCropView> {
       return;
     }
     // The outline a size was given for keeps it while it is dragged.
-    final tied = _sizeCorners;
-    final dragsTied = tied != null && ZQuadMath.isSame(_corners, tied);
+    final dragsTied = _onTiedOutline;
     setState(() {
       _userTouched = true;
       _corners = moved;
@@ -827,6 +934,9 @@ class _FrameCropViewState extends State<FrameCropView> {
           anchorSize: _sizeCorners == null ? null : _size,
           anchorCorners:
               _sizeCorners == null ? null : List.unmodifiable(_sizeCorners!),
+          anchorCandidate: _sizeCorners == null || _sizeBase == _manualShapeKey
+              ? null
+              : _sizeBase,
           shownSize: shownSize,
           outputAspectWH: out == null ? null : aspectWH,
           outputBytes: out,

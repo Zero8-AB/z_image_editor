@@ -494,13 +494,27 @@ A photo has no scale, so only one outline of an object is sized from the
 common sizes, and the outlines nested with it are measured against it:
 `ZRectAspect.sizeOnPlane` straightens the anchor quad to its rectangle
 (inverse of `ZQuadMath.squareToQuad`) and takes the other quad through the
-same transform. The anchor is the outline a size was confirmed or measured
-for (`_sizeCorners`; it follows Rotate and drags of that outline, and is
-kept in `FrameCropResult.anchorSize` / `anchorCorners`), else the
-detector's outermost outline with `ZCommonSizes.estimate` of its shape. A
-measured `knownSize` is tied to the pre-selected outline; a size from the
-artwork's details is tied to none. The full photo is not a level and keeps
-its own estimate.
+same transform. The anchor (`_reference`) is the outline a size is known
+for, else the detector's outermost outline with `ZCommonSizes.estimate` of
+its shape:
+
+- confirmed in the sheet: the outline it was confirmed on (`_sizeCorners`,
+  `_sizeBase`; a chip keeps its size through drags, Reset and Rotate; kept
+  in `FrameCropResult.anchorSize` / `anchorCorners` / `anchorCandidate`).
+  The sheet heads its fields "including frame" on the outermost outline
+  and "without frame" on an outline inside it;
+- measured `knownSize`: the pre-selected outline;
+- from the artwork's details: the outermost outline whose shape it has
+  (within `kKnownSizeAspectTolerance`), none when no shape fits.
+
+An outline that is not nested with the anchor but lies inside the outermost
+outline is measured against that outline, itself sized from the anchor. The
+full photo is not a level: it keeps its own estimate and is never an
+anchor for other outlines. A round outline keeps one diameter.
+
+`onArtworkSizeConfirmed` gets the confirmed size (`anchorSize`) once per
+size whichever outline Next is pressed on; `onArtworkSize` the selected
+outline's shown size.
 
 `ZCommonSizes.estimate` is `bestFit` (within 5 %), else the shape itself at
 the area of `ZCommonSizes.typical` (50 × 40) with sides rounded to 5 cm.

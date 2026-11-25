@@ -128,14 +128,15 @@ class ZImageEditor extends StatefulWidget {
 
   /// Size known up front (artwork details, or measured). Exact sizes are
   /// shown without "≈" and give the straightened image its shape. A
-  /// measured size belongs to the pre-selected outline (other outlines are
-  /// scaled from it, "≈"); one from the details to whichever outline its
-  /// shape fits.
+  /// measured size belongs to the pre-selected outline, one from the
+  /// details to the outermost outline that has its shape; the other
+  /// outlines are scaled from it ("≈").
   final ZArtworkSize? artworkSize;
 
-  /// Called (on Next) when the user confirmed a size in the size sheet and
-  /// kept the outline it was confirmed for. On another outline of the same
-  /// object only [onArtworkSize] is called, with the size scaled to it.
+  /// Called on Next with the size the user confirmed in the size sheet,
+  /// once per confirmed size, whichever outline is selected on Next (the
+  /// sheet says whether it is with or without the frame). The selected
+  /// outline's own size goes to [onArtworkSize].
   final ValueChanged<ZArtworkSize>? onArtworkSizeConfirmed;
 
   /// Called on Next in the frame step with the size the step shows, whatever
@@ -297,6 +298,10 @@ class _ZImageEditorState extends State<ZImageEditor> {
   /// Last frame-step result per index, so reopening restores it.
   final Map<int, FrameCropResult> _frameResults = {};
 
+  /// The confirmed size last reported per image, so it is reported once and
+  /// not again on every Next.
+  final Map<int, ZArtworkSize> _reportedConfirmed = {};
+
   File? get _currentImageFile => _frameOutputs.containsKey(_currentIndex)
       ? null
       : widget.imageFiles?[_currentIndex];
@@ -317,11 +322,14 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
   void _onFrameContinue(FrameCropResult result) {
     final previous = _frameResults[_currentIndex];
-    final size = result.size;
-    if (size != null &&
-        size.source == ZSizeSource.confirmed &&
-        size != previous?.size) {
-      widget.onArtworkSizeConfirmed?.call(size);
+    // What the user confirmed in the size sheet, whichever outline Next
+    // was pressed on.
+    final confirmed = [result.anchorSize, result.size]
+        .where((s) => s?.source == ZSizeSource.confirmed)
+        .firstOrNull;
+    if (confirmed != null && confirmed != _reportedConfirmed[_currentIndex]) {
+      _reportedConfirmed[_currentIndex] = confirmed;
+      widget.onArtworkSizeConfirmed?.call(confirmed);
     }
     final shown = result.shownSize;
     if (shown != null) widget.onArtworkSize?.call(shown);

@@ -356,14 +356,16 @@ void main() {
     });
 
     testWidgets(
-        'a size from the artwork’s details is not tied to an outline: exact '
-        'wherever its shape fits', (tester) async {
+        'a size from the artwork’s details belongs to the outermost outline '
+        'of its shape; the others are scaled from it', (tester) async {
       await pumpStep(tester, saturn(),
           known: const ZArtworkSize(
               heightCm: 70, widthCm: 50, source: ZSizeSource.details));
       expect(sizeButton(tester).label, '70 × 50 cm');
       await selectChip(tester, 0);
-      // Equal, never larger: the details may describe either level.
+      expect(sizeButton(tester).label, startsWith('≈ '));
+      expect(shownCm(tester).$1, closeTo(61, 1.5));
+      await selectChip(tester, 2);
       expect(sizeButton(tester).label, '70 × 50 cm');
     });
 
@@ -394,7 +396,7 @@ void main() {
     });
   });
 
-  group('no common size has the shape (TV, 16 : 9)', () {
+  group('no common size has the shape (TV, 16 : 9, upright in the photo)', () {
     testWidgets('an approximate size is still shown, with lines',
         (tester) async {
       final h = await pumpStep(tester, [
