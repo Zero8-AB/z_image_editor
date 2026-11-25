@@ -61,7 +61,11 @@ class FrameMeasurementLines extends StatelessWidget {
     // only the pill is shown, scaled down to fit.
     double pillLength(String text) {
       final tp = TextPainter(
-        text: TextSpan(text: text, style: style),
+        // As the Text widget will draw it (inherits the default style).
+        text: TextSpan(
+          text: text,
+          style: DefaultTextStyle.of(context).style.merge(style),
+        ),
         textDirection: TextDirection.ltr,
         textScaler: MediaQuery.textScalerOf(context),
         maxLines: 1,

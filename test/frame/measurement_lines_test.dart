@@ -30,6 +30,32 @@ void main() {
     expect(find.byKey(const Key('z_frame_height_line')), findsOneWidget);
   });
 
+  testWidgets('just too short for lines and label, with letter spacing',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    for (var w = 60.0; w < 200; w += 0.5) {
+      await tester.pumpWidget(MaterialApp(
+        home: DefaultTextStyle(
+          style: const TextStyle(letterSpacing: 1.5),
+          child: Stack(children: [
+            Positioned.fill(
+              child: FrameMeasurementLines(
+                theme: const ZImageEditorTheme(),
+                outline: Rect.fromLTWH(20, 20, w, w),
+                bounds: const Size(360, 640),
+                heightLabel: '≈ 50 cm',
+                widthLabel: '≈ 50 cm',
+              ),
+            ),
+          ]),
+        ),
+      ));
+      expect(tester.takeException(), isNull, reason: 'width $w');
+    }
+  });
+
   testWidgets('an outline shorter than its label: label only, scaled down',
       (tester) async {
     await pumpLines(tester, const Rect.fromLTWH(100, 100, 40, 30));
