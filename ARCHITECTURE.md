@@ -494,3 +494,28 @@ n2/n3 when no EXIF focal length is given (rejecting implausible values),
 and returns √(‖A⁻¹n2‖² / ‖A⁻¹n3‖²). On Next the warp receives
 `aspectWH = 1 / aspect` and `ZQuadMath.warpOutputSize` keeps the longer
 measured side and derives the other from it.
+
+## 17. Photo Hints
+
+`ZPhotoChecker.check(bytes, candidates)` runs once in the frame step, right
+after detection (or at once without a detector), and never blocks: Next
+stays enabled and a failing checker shows nothing. The result, whether it
+ran and whether the user closed the hint travel in `FrameCropResult`
+(`photoIssue`, `photoChecked`, `hintClosed`), so "‹ Frame" does not check
+again or bring a closed hint back.
+
+The default `ZPhotoQuality` decodes the photo at 512 px (engine decoder,
+`targetWidth`/`targetHeight`) and measures, in pure Dart:
+
+| Hint | Measure | Fires when |
+|---|---|---|
+| glare | share of pixels with luma ≥ 245 and channel spread ≤ 30 inside the outermost outline's bounds (else the middle 80 %) | 1.5 % ≤ share ≤ 50 % (above that the artwork itself is white or the photo is blown out) |
+| cornersMissing | outermost outline touching the photo edge (≤ 0.4 %) | 1–3 corners on the edge (4 = the whole photo, no evidence) |
+| tooDark | mean luma and 95th percentile | mean < 55 and p95 < 130 |
+| blurry | 4-neighbour Laplacian: variance and 99.5th percentile of \|L\| | variance < 60 and p99.5 < 40, and not too dark (a flat painting keeps the frame's sharp edges) |
+
+Only one hint is shown, in that order. The banner (`ZPhotoHintBanner`)
+sits between the header and the photo: Retake (only with `onRetake`), Use
+anyway and a 44 px cross; both close it. The fixtures in
+`test/fixtures/photo_quality` come from `tool/make_photo_quality_fixtures.dart`.
+

@@ -6,6 +6,7 @@
 
 * frame step restyled per the approved design: dashed alternative outlines, ringed handles, 44 px chip tap areas, new line icons
 * artwork size tools (`enableSizeTools`, `artworkSize`, `onArtworkSizeConfirmed`): Size tool, red measurement lines (≈ estimated / exact), "Real size of the artwork" sheet with common sizes, auto-fill of the other side and depth picks
+* photo hints in the frame step (`photoChecker`, `ZPhotoQuality`, `ZPhotoIssue`, `onRetake`, `ZPhotoHintLabels`): at most one calm banner for glare, cut-off frame, darkness or blur, with Retake / Use anyway / dismiss; never blocks
 * tip sheet before the camera (`showZPhotoTipSheet`, `ZPhotoTipSheet`, `ZPhotoTipLabels`): three photo tips, "Take photo" and "Don’t show this again" (the app persists the choice)
 * straightened images keep the real shape (`ZRectAspect`: perspective aspect ratio with the EXIF focal length; `warpOutputSize(aspectWH:)`)
 * optional perspective "frame" step (`frameDetector`, `startWithFrameCrop`, `ZFrameCandidate`, `ZQuadMath`, `ZPerspectiveWarp`): choose a four-corner outline from up to three detector suggestions or drag the corners (with magnifier), rotate, then continue editing the straightened image

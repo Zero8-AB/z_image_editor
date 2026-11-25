@@ -68,6 +68,10 @@ class ZImageEditorTheme {
   final Color sheetEstimatedBorderColor;
   final Color sheetBestFitColor;
 
+  // ── Photo hint banner ─────────────────────────────────────────────────
+  final Color hintBannerColor;
+  final Color hintBodyColor;
+
   // ── Measurement lines ─────────────────────────────────────────────────
   /// Show size lines next to the outline (needs a size or an estimate).
   final bool showMeasurements;
@@ -155,6 +159,8 @@ class ZImageEditorTheme {
     this.sheetEstimatedFillColor = const Color(0xFFF8F9FA),
     this.sheetEstimatedBorderColor = const Color(0xFFA0A0A0),
     this.sheetBestFitColor = const Color(0xFF8A1B1B),
+    this.hintBannerColor = const Color(0xFF2A2626),
+    this.hintBodyColor = const Color(0xFFBDB8B8),
     this.showMeasurements = false,
     this.measurementColor = const Color(0xFFCE5151),
     this.tabSelectedColor = const Color(0xFF007AFF),

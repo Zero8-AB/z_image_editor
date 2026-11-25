@@ -11,6 +11,8 @@ import '../theme/themed_controls.dart';
 import '../theme/z_image_editor_theme.dart';
 import 'artwork_size.dart';
 import 'frame_detector.dart';
+import 'photo_hint_banner.dart';
+import 'photo_quality.dart';
 import 'measurement_lines.dart';
 import 'perspective_warp.dart';
 import 'quad_math.dart';
@@ -62,7 +64,19 @@ class FrameCropResult {
   /// Width / height the straightened image was given (null: no warp).
   final double? outputAspectWH;
 
+  /// The photo hint found (null: none, or not checked).
+  final ZPhotoIssue? photoIssue;
+
+  /// Whether the photo check ran (so reopening the step does not repeat it).
+  final bool photoChecked;
+
+  /// Whether the user closed the hint (Use anyway or the cross).
+  final bool hintClosed;
+
   const FrameCropResult({
+    this.photoIssue,
+    this.photoChecked = false,
+    this.hintClosed = false,
     this.size,
     this.outputAspectWH,
     required this.outputBytes,
@@ -109,6 +123,13 @@ class FrameCropView extends StatefulWidget {
   final ZArtworkSize? knownSize;
   final ZSizeSheetLabels sizeLabels;
 
+  /// Checks the photo after detection and shows at most one hint.
+  final ZPhotoChecker? photoChecker;
+  final ZPhotoHintLabels hintLabels;
+
+  /// "Retake" in the hint; null hides it.
+  final VoidCallback? onRetake;
+
   final VoidCallback onCancel;
   final ValueChanged<FrameCropResult> onContinue;
 
@@ -132,6 +153,9 @@ class FrameCropView extends StatefulWidget {
     this.sizeTools = false,
     this.knownSize,
     this.sizeLabels = const ZSizeSheetLabels(),
+    this.photoChecker,
+    this.hintLabels = const ZPhotoHintLabels(),
+    this.onRetake,
   });
 
   @override
@@ -190,6 +214,11 @@ class _FrameCropViewState extends State<FrameCropView> {
   /// Exact size (details, measured or confirmed); null = estimate only.
   ZArtworkSize? _size;
 
+  /// Photo hint (at most one) and whether the user closed it.
+  ZPhotoIssue? _issue;
+  bool _photoChecked = false;
+  bool _hintClosed = false;
+
   /// Focal length in display-image pixels from EXIF (null: unknown).
   double? _focalPx;
   bool _focalRead = false;
@@ -231,13 +260,19 @@ class _FrameCropViewState extends State<FrameCropView> {
       _userTouched = true;
       _enhanceOn = previous.enhanceOn;
       _size = previous.size;
+      _issue = previous.photoIssue;
+      _photoChecked = previous.photoChecked;
+      _hintClosed = previous.hintClosed;
     }
     _size ??= widget.knownSize?.isExact == true ? widget.knownSize : null;
     _decode();
     if (previous != null && previous.detectionDone) {
       _setCandidates(previous.candidates);
+      if (!_photoChecked) _checkPhoto();
     } else if (widget.detector != null) {
       _detect();
+    } else {
+      _checkPhoto();
     }
     if (previous != null && previous.enhancerRan) {
       _enhancerRan = true;
@@ -342,7 +377,26 @@ class _FrameCropViewState extends State<FrameCropView> {
       _detecting = false;
       _setCandidates(found);
     });
+    _checkPhoto();
   }
+
+  /// Runs the photo checker (after detection, with its outlines). Never
+  /// blocks: Next stays available and failures show nothing.
+  Future<void> _checkPhoto() async {
+    final checker = widget.photoChecker;
+    if (checker == null || _photoChecked) return;
+    _photoChecked = true;
+    ZPhotoIssue? issue;
+    try {
+      issue = await checker.check(widget.imageBytes, _candidates);
+    } catch (_) {
+      issue = null;
+    }
+    if (!mounted) return;
+    setState(() => _issue = issue);
+  }
+
+  void _closeHint() => setState(() => _hintClosed = true);
 
   Future<void> _enhance() async {
     setState(() => _enhancing = true);
@@ -471,6 +525,9 @@ class _FrameCropViewState extends State<FrameCropView> {
           enhanceOn: _enhanceOn,
           enhancedBytes: _enhancedBytes,
           enhancerRan: _enhancerRan,
+          photoIssue: _issue,
+          photoChecked: _photoChecked,
+          hintClosed: _hintClosed,
         );
 
     if (_turns == 0 && ZQuadMath.isFullImage(corners)) {
@@ -531,6 +588,20 @@ class _FrameCropViewState extends State<FrameCropView> {
                 ? null
                 : _continue,
           ),
+          if (_issue != null && !_hintClosed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: ZPhotoHintBanner(
+                theme: _theme,
+                labels: widget.hintLabels,
+                issue: _issue!,
+                onRetake: widget.onRetake == null || _applying
+                    ? null
+                    : widget.onRetake,
+                onUseAnyway: _closeHint,
+                onDismiss: _closeHint,
+              ),
+            ),
           Expanded(child: _buildCanvas()),
           Container(
             color: _theme.panelColor,

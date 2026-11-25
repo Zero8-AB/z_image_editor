@@ -26,6 +26,12 @@ enum ZLineIconKind {
   compare,
   circle,
   oval,
+
+  /// Photo hints: reflection (sun), blur, darkness (moon), cut-off corners.
+  hintGlare,
+  hintBlurry,
+  hintDark,
+  hintCorners,
 }
 
 /// Draws [path] dashed ([dash] on, [gap] off).
@@ -216,6 +222,48 @@ class _LineIconPainter extends CustomPainter {
         canvas.drawCircle(const Offset(12, 12), 8, p);
       case ZLineIconKind.oval:
         canvas.drawOval(const Rect.fromLTWH(3, 6, 18, 12), p);
+      case ZLineIconKind.hintGlare:
+        for (final (a, b, c, d) in const [
+          (12.0, 3.0, 12.0, 5.0),
+          (12.0, 19.0, 12.0, 21.0),
+          (4.2, 4.2, 5.6, 5.6),
+          (18.4, 18.4, 19.8, 19.8),
+          (3.0, 12.0, 5.0, 12.0),
+          (19.0, 12.0, 21.0, 12.0),
+          (4.2, 19.8, 5.6, 18.4),
+          (18.4, 5.6, 19.8, 4.2),
+        ]) {
+          line(a, b, c, d);
+        }
+        canvas.drawCircle(const Offset(12, 12), 4, p);
+      case ZLineIconKind.hintBlurry:
+        canvas.drawRect(const Rect.fromLTWH(7, 5, 12, 14), p);
+        line(4, 8, 4, 16);
+        line(2, 10, 2, 14);
+        line(22, 9, 22, 15);
+      case ZLineIconKind.hintDark:
+        canvas.drawPath(
+            Path()
+              ..moveTo(20, 14.5)
+              ..arcToPoint(const Offset(9.5, 4),
+                  radius: const Radius.circular(8), clockwise: false)
+              ..arcToPoint(const Offset(20, 14.5),
+                  radius: const Radius.circular(8.5)),
+            p);
+      case ZLineIconKind.hintCorners:
+        line(3, 8, 3, 3);
+        line(3, 3, 8, 3);
+        line(16, 3, 21, 3);
+        line(21, 3, 21, 8);
+        line(21, 16, 21, 21);
+        line(21, 21, 16, 21);
+        drawDashedPath(
+            canvas,
+            Path()
+              ..moveTo(8, 21)
+              ..lineTo(1, 21),
+            p);
+        canvas.drawRect(const Rect.fromLTWH(7, 7, 10, 10), p);
     }
   }
 

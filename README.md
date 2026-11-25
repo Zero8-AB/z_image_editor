@@ -378,6 +378,16 @@ ZImageEditor(
 )
 ```
 
+### Photo hints
+
+Pass `photoChecker: const ZPhotoQuality()` to check the photo in the frame
+step. At most one banner is shown (in this order): a strong reflection on
+the glass, part of the frame outside the photo, too dark, blurry. "Retake"
+appears when `onRetake` is set (the app closes the editor and opens the
+camera again); "Use anyway" and the cross close the banner. Nothing is ever
+blocked. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
+`ZPhotoChecker` for your own checks.
+
 ### Tip sheet before the camera
 
 `showZPhotoTipSheet(context, theme: ...)` shows "Photograph your artwork"
