@@ -206,4 +206,32 @@ class ZQuadMath {
   /// again the top-left corner on screen.
   static List<Offset> rotateQuad(List<Offset> q, int quarterTurns) =>
       orderCorners([for (final p in q) rotatePoint(p, quarterTurns)]);
+
+  /// Points of the ellipse inscribed in quad [q] (TL, TR, BR, BL): the
+  /// unit square's inscribed circle taken through [squareToQuad], so it
+  /// touches every side and becomes a circle (in a square output) or an
+  /// axis-aligned ellipse when the quad is rectified.
+  static List<Offset> inscribedEllipse(List<Offset> q, {int segments = 72}) {
+    final m = squareToQuad(q);
+    return [
+      for (var i = 0; i < segments; i++)
+        applySquareToQuad(
+          m,
+          0.5 + 0.5 * math.cos(2 * math.pi * i / segments),
+          0.5 + 0.5 * math.sin(2 * math.pi * i / segments),
+        ),
+    ];
+  }
+
+  /// Where the inscribed ellipse touches the sides of [q]: top, right,
+  /// bottom, left (the handles of a round outline).
+  static List<Offset> ellipseTouchPoints(List<Offset> q) {
+    final m = squareToQuad(q);
+    return [
+      applySquareToQuad(m, 0.5, 0),
+      applySquareToQuad(m, 1, 0.5),
+      applySquareToQuad(m, 0.5, 1),
+      applySquareToQuad(m, 0, 0.5),
+    ];
+  }
 }

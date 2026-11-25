@@ -1,6 +1,11 @@
 import 'dart:typed_data';
 import 'dart:ui' show Offset;
 
+/// Shape of a detected outline. For [round] and [oval] the outline is the
+/// ellipse inscribed in the four corners (touching each side at its
+/// middle, through the same perspective as the corners).
+enum ZFrameShape { rectangle, round, oval }
+
 /// One outline the frame step can offer: four corners of a (possibly
 /// perspective-distorted) rectangle in the photo, plus a label for its chip.
 ///
@@ -22,11 +27,16 @@ class ZFrameCandidate {
   /// Reset returns to). When no candidate sets it, the first one is used.
   final bool preselected;
 
+  /// Shape of this outline. The outermost candidate's shape is shown as
+  /// "Round frame found" / "Oval frame found"; each level keeps its own.
+  final ZFrameShape shape;
+
   ZFrameCandidate({
     required List<Offset> corners,
     required this.label,
     this.score = 0,
     this.preselected = false,
+    this.shape = ZFrameShape.rectangle,
   }) : corners = List.unmodifiable(corners) {
     if (corners.length != 4) {
       throw ArgumentError.value(
@@ -38,7 +48,8 @@ class ZFrameCandidate {
   }
 
   @override
-  String toString() => 'ZFrameCandidate($label, score: $score, $corners)';
+  String toString() =>
+      'ZFrameCandidate($label, ${shape.name}, score: $score, $corners)';
 }
 
 /// Finds candidate outlines (frame, mat window, artwork, ...) in a photo.
@@ -121,6 +132,21 @@ class ZFrameCropLabels {
   /// Size tool label when no size can be estimated.
   final String sizeUnknownLabel;
 
+  /// Shape label when the outline is round / oval / a rectangle (the
+  /// rectangle text only appears after "Wrong?" changed a round shape).
+  final String roundFoundLabel;
+  final String ovalFoundLabel;
+  final String rectangleShapeLabel;
+
+  /// Link next to the shape label that opens the shape menu.
+  final String wrongShapeLabel;
+
+  /// Title and options of the shape menu.
+  final String shapeMenuTitle;
+  final String shapeRectangle;
+  final String shapeRound;
+  final String shapeOval;
+
   const ZFrameCropLabels({
     this.title = 'Choose the frame',
     this.editorTitle = 'Edit photo',
@@ -133,5 +159,13 @@ class ZFrameCropLabels {
     this.manualHint = 'Drag the corners to the edges you want to keep.',
     this.sizeCheckSuffix = ' · Check',
     this.sizeUnknownLabel = 'Size · Check',
+    this.roundFoundLabel = 'Round frame found',
+    this.ovalFoundLabel = 'Oval frame found',
+    this.rectangleShapeLabel = 'Rectangle',
+    this.wrongShapeLabel = 'Wrong?',
+    this.shapeMenuTitle = 'Shape of the frame',
+    this.shapeRectangle = 'Rectangle',
+    this.shapeRound = 'Round',
+    this.shapeOval = 'Oval',
   });
 }

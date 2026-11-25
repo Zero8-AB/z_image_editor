@@ -38,7 +38,11 @@ void main() {
       expect(ZCommonSizes.bestFit(0.8)!.label, '40 × 50');
       expect(ZCommonSizes.bestFit(1.43)!.label, '100 × 70');
       expect(ZCommonSizes.bestFit(0.25), isNull);
-      expect(ZCommonSizes.bestFit(1.0), isNull);
+      // Square (round frames): 50 × 50 first.
+      expect(ZCommonSizes.bestFit(1.0)!.label, '50 × 50');
+      expect(ZCommonSizes.forAspect(1.02).first.label, '50 × 50');
+      expect(ZCommonSizes.forAspect(1.25).any((s) => s.heightCm == s.widthCm),
+          isFalse);
     });
 
     test('ratio text', () {

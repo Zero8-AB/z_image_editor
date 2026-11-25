@@ -388,6 +388,21 @@ camera again); "Use anyway" and the cross close the banner. Nothing is ever
 blocked. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
 `ZPhotoChecker` for your own checks.
 
+### Round and oval frames
+
+A detector can mark an outline as round or oval
+(`ZFrameCandidate(shape: ZFrameShape.round, corners: ...)`); the corners
+are then the four corners of the quad the ellipse is inscribed in (it
+touches each side at its middle, through the same perspective). The frame
+step draws the ellipse with four handles on its sides (dragging one moves
+that side) and shows "◯ Round frame found · Wrong?" above the chips while
+any outline is round or oval. "Wrong?" opens a Rectangle / Round / Oval
+menu for the current outline; there are no shape buttons. Each outline
+keeps its own shape (a round mat opening inside a rectangular frame is
+fine). On Next a round outline is rectified to a circle (square output),
+an oval keeps its measured shape, and outside the ellipse is transparent
+(PNG), or `roundFrameFill` (#F5F0F0) when `outputFormat` is JPEG.
+
 ### Auto colour fix
 
 With the themed look (`theme.toolRowTabs`), `enableAutoFix: true` puts an

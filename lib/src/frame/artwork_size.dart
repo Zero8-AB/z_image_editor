@@ -114,13 +114,27 @@ class ZCommonSizes {
     ZCommonSize(30, 21, 'A4'),
   ];
 
+  /// Square sizes (round frames, square canvases); offered first when the
+  /// artwork is (nearly) square.
+  static const square = [
+    ZCommonSize(50, 50),
+    ZCommonSize(40, 40),
+    ZCommonSize(30, 30),
+    ZCommonSize(70, 70),
+  ];
+
   /// How close (relative) a size's shape must be to count as a match.
   static const double tolerance = 0.05;
 
   /// The list oriented like the artwork: portrait sizes for upright art
-  /// (H ≥ W), landscape for wide art.
-  static List<ZCommonSize> forAspect(double aspectHW) =>
-      aspectHW >= 1 ? portrait : [for (final s in portrait) s.landscape];
+  /// (H ≥ W), landscape for wide art; square sizes first for square art.
+  static List<ZCommonSize> forAspect(double aspectHW) {
+    final oriented =
+        aspectHW >= 1 ? portrait : [for (final s in portrait) s.landscape];
+    return shapeDiff(aspectHW, 1) <= tolerance
+        ? [...square, ...oriented]
+        : oriented;
+  }
 
   /// Relative shape difference (0 = same shape).
   static double shapeDiff(double a, double b) =>

@@ -79,8 +79,12 @@ class ZAutoLevels {
       List<int>.filled(256, 0),
     ];
     final lumaHist = List<int>.filled(256, 0);
+    // Transparent pixels (outside a round frame) don't count.
+    var counted = 0;
     for (var i = 0; i < n; i++) {
       final o = i * 4;
+      if (rgba[o + 3] < 128) continue;
+      counted++;
       final r = rgba[o], g = rgba[o + 1], b = rgba[o + 2];
       hist[0][r]++;
       hist[1][g]++;
@@ -91,8 +95,8 @@ class ZAutoLevels {
     // 1. Per-channel stretch of [lo, hi] to [0, 255].
     final g1 = List<double>.filled(3, 1), o1 = List<double>.filled(3, 0);
     for (var c = 0; c < 3; c++) {
-      final lo = _percentile(hist[c], n, clip).toDouble();
-      final hi = _percentile(hist[c], n, 1 - clip).toDouble();
+      final lo = _percentile(hist[c], counted, clip).toDouble();
+      final hi = _percentile(hist[c], counted, 1 - clip).toDouble();
       final range = math.max(hi - lo, 255 / maxGain);
       g1[c] = 255 / range;
       o1[c] = -lo * g1[c];
@@ -100,11 +104,12 @@ class ZAutoLevels {
 
     // 2. White balance: the brightest, nearly neutral pixels (white mat,
     // paper) should come out neutral after the stretch.
-    final lumaP90 = _percentile(lumaHist, n, 0.9);
+    final lumaP90 = _percentile(lumaHist, counted, 0.9);
     final sum = [0.0, 0.0, 0.0];
     var count = 0;
     for (var i = 0; i < n; i++) {
       final o = i * 4;
+      if (rgba[o + 3] < 128) continue;
       final r = rgba[o], g = rgba[o + 1], b = rgba[o + 2];
       final y = (299 * r + 587 * g + 114 * b) ~/ 1000;
       if (y < lumaP90 || y >= 254) continue;
@@ -117,7 +122,7 @@ class ZAutoLevels {
     }
     final k = [1.0, 1.0, 1.0];
     var tinted = false;
-    if (count >= n * 0.01) {
+    if (count >= counted * 0.01) {
       final m = [
         for (var c = 0; c < 3; c++) g1[c] * sum[c] / count + o1[c],
       ];
@@ -139,8 +144,8 @@ class ZAutoLevels {
         contrast * k[c] * o1[c] + (1 - contrast) * 127.5,
     ];
 
-    final p1 = _percentile(lumaHist, n, 0.01);
-    final p99 = _percentile(lumaHist, n, 0.99);
+    final p1 = _percentile(lumaHist, counted, 0.01);
+    final p99 = _percentile(lumaHist, counted, 0.99);
     final fix = ZAutoLevels(gain: gain, offset: offset);
     final lifted = p1 >= hazyBlack && p99 - p1 < hazyRange;
     final hazy = !fix.isNoop && (lifted || tinted);

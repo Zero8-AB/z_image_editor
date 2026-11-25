@@ -23,6 +23,11 @@ class ZPerspectiveWarp {
   /// normalized [corners] (TL, TR, BR, BL) and re-encodes the result
   /// (JPEG, or PNG when the source has an alpha channel).
   ///
+  /// With [ellipse] only the ellipse inscribed in the output is kept (a
+  /// round or oval frame): outside it is transparent (PNG), or
+  /// [outsideFill] (0xAARRGGBB, opaque; JPEG unless the source has alpha)
+  /// when the result can't keep transparency.
+  ///
   /// Throws a [FormatException] when [bytes] cannot be decoded.
   static Future<Uint8List> warpBytes(
     Uint8List bytes,
@@ -30,13 +35,16 @@ class ZPerspectiveWarp {
     int jpegQuality = 95,
     int? maxSide = defaultMaxOutputSide,
     double? aspectWH,
+    bool ellipse = false,
+    int? outsideFill,
   }) {
     final flat = <double>[
       for (final c in corners) ...[c.dx, c.dy]
     ];
     return compute(
       _warpEntry,
-      _WarpJob(bytes, flat, jpegQuality, maxSide, aspectWH),
+      _WarpJob(
+          bytes, flat, jpegQuality, maxSide, aspectWH, ellipse, outsideFill),
       debugLabel: 'z_image_editor frame warp',
     );
   }
@@ -48,6 +56,8 @@ class ZPerspectiveWarp {
     int jpegQuality = 95,
     int? maxSide = defaultMaxOutputSide,
     double? aspectWH,
+    bool ellipse = false,
+    int? outsideFill,
   }) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) {
@@ -69,10 +79,68 @@ class ZPerspectiveWarp {
     final pixelQuad = [
       for (final c in corners) Offset(c.dx * src.width, c.dy * src.height),
     ];
-    final out = warpImage(src, pixelQuad, maxSide: maxSide, aspectWH: aspectWH);
+    var out = warpImage(src, pixelQuad, maxSide: maxSide, aspectWH: aspectWH);
+    if (ellipse) out = maskEllipse(out, outsideFill: outsideFill);
     return out.numChannels == 4
         ? img.encodePng(out)
         : img.encodeJpg(out, quality: jpegQuality);
+  }
+
+  /// Keeps the ellipse inscribed in [image]; outside it becomes
+  /// transparent (the result has 4 channels) or [outsideFill]
+  /// (0xAARRGGBB, treated as opaque). The edge is anti-aliased over about
+  /// one pixel.
+  static img.Image maskEllipse(img.Image image, {int? outsideFill}) {
+    final fill = outsideFill;
+    final channels = fill == null ? 4 : image.numChannels;
+    final src =
+        image.numChannels == channels && image.format == img.Format.uint8
+            ? image
+            : image.convert(
+                format: img.Format.uint8,
+                numChannels: channels,
+                alpha: channels == 4 ? 255 : null,
+              );
+    var bytes = src.getBytes(
+      order: channels == 4 ? img.ChannelOrder.rgba : img.ChannelOrder.rgb,
+    );
+    if (bytes.offsetInBytes != 0 ||
+        bytes.buffer.lengthInBytes != bytes.length) {
+      bytes = Uint8List.fromList(bytes);
+    }
+    final w = src.width, h = src.height;
+    final rx = w / 2, ry = h / 2;
+    final fr = fill == null ? 0 : (fill >> 16) & 0xFF;
+    final fg = fill == null ? 0 : (fill >> 8) & 0xFF;
+    final fb = fill == null ? 0 : fill & 0xFF;
+    // Distance to the edge in pixels ≈ (1 − r) · min radius.
+    final scale = math.min(rx, ry);
+    var o = 0;
+    for (var y = 0; y < h; y++) {
+      final dy = (y + 0.5 - ry) / ry;
+      for (var x = 0; x < w; x++) {
+        final dx = (x + 0.5 - rx) / rx;
+        final r = math.sqrt(dx * dx + dy * dy);
+        final cover = ((1 - r) * scale + 0.5).clamp(0.0, 1.0);
+        if (cover < 1) {
+          if (fill == null) {
+            bytes[o + 3] = (bytes[o + 3] * cover).round();
+            if (cover == 0) bytes[o] = bytes[o + 1] = bytes[o + 2] = 0;
+          } else {
+            bytes[o] = (bytes[o] * cover + fr * (1 - cover)).round();
+            bytes[o + 1] = (bytes[o + 1] * cover + fg * (1 - cover)).round();
+            bytes[o + 2] = (bytes[o + 2] * cover + fb * (1 - cover)).round();
+          }
+        }
+        o += channels;
+      }
+    }
+    return img.Image.fromBytes(
+      width: w,
+      height: h,
+      bytes: bytes.buffer,
+      numChannels: channels,
+    );
   }
 
   /// Rectifies [pixelQuad] (TL, TR, BR, BL in pixels of [src]) into a new
@@ -159,12 +227,16 @@ class _WarpJob {
   final int jpegQuality;
   final int? maxSide;
   final double? aspectWH;
+  final bool ellipse;
+  final int? outsideFill;
   const _WarpJob(
     this.bytes,
     this.corners,
     this.jpegQuality,
     this.maxSide,
     this.aspectWH,
+    this.ellipse,
+    this.outsideFill,
   );
 }
 
@@ -179,5 +251,7 @@ Uint8List _warpEntry(_WarpJob job) {
     jpegQuality: job.jpegQuality,
     maxSide: job.maxSide,
     aspectWH: job.aspectWH,
+    ellipse: job.ellipse,
+    outsideFill: job.outsideFill,
   );
 }

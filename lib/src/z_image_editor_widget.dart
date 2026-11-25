@@ -155,6 +155,10 @@ class ZImageEditor extends StatefulWidget {
   /// Texts of the themed Adjust tab and the Before/After compare.
   final ZAutoFixLabels autoFixLabels;
 
+  /// Round / oval frames: outside the ellipse is transparent, except when
+  /// [outputFormat] is JPEG (no alpha), where it is filled with this.
+  final Color roundFrameFill;
+
   /// Colours, fonts and sizes of the editor chrome and the frame step.
   /// The default reproduces the original look.
   final ZImageEditorTheme theme;
@@ -192,6 +196,7 @@ class ZImageEditor extends StatefulWidget {
     this.onRetake,
     this.enableAutoFix = false,
     this.autoFixLabels = const ZAutoFixLabels(),
+    this.roundFrameFill = const Color(0xFFF5F0F0),
   })  : assert(
           imageFiles != null || imageBytesList != null,
           'Provide imageFiles or imageBytesList.',
@@ -288,6 +293,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
         previous != null &&
         previous.quarterTurns == result.quarterTurns &&
         previous.enhanceOn == result.enhanceOn &&
+        previous.shape == result.shape &&
         _sameCorners(previous.corners, result.corners);
     if (unchanged) {
       setState(() {
@@ -630,6 +636,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
           photoChecker: widget.photoChecker,
           hintLabels: widget.photoHintLabels,
           onRetake: widget.onRetake,
+          outsideFill: widget.outputFormat == ImageOutputFormat.jpeg
+              ? widget.roundFrameFill
+              : null,
           onCancel: _frameReopened
               ? () => setState(() => _inFrameStep = false)
               : widget.onCancel,

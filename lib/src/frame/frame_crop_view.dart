@@ -17,6 +17,7 @@ import 'measurement_lines.dart';
 import 'perspective_warp.dart';
 import 'quad_math.dart';
 import 'rect_aspect.dart';
+import 'shape_label.dart';
 import 'size_sheet.dart';
 
 /// At most this many outline chips are shown, whatever the detector returns.
@@ -73,7 +74,17 @@ class FrameCropResult {
   /// Whether the user closed the hint (Use anyway or the cross).
   final bool hintClosed;
 
+  /// Shape of the outline the image was cut to (round / oval: outside the
+  /// ellipse is transparent or filled).
+  final ZFrameShape shape;
+
+  /// Shapes the user picked with "Wrong?", per chip (-1: hand-made / full
+  /// photo outline), so reopening restores them.
+  final Map<int, ZFrameShape> shapeOverrides;
+
   const FrameCropResult({
+    this.shape = ZFrameShape.rectangle,
+    this.shapeOverrides = const {},
     this.photoIssue,
     this.photoChecked = false,
     this.hintClosed = false,
@@ -99,6 +110,9 @@ typedef FrameWarpFunction = Future<Uint8List> Function(
   Uint8List bytes,
   List<Offset> corners,
 );
+
+/// Key of the hand-made / full-photo outline in the shape overrides.
+const int _manualShapeKey = -1;
 
 /// The "choose the painting's rectangle" step: the photo with a draggable
 /// four-corner outline, up to [kMaxFrameCandidates] detector outlines as
@@ -136,6 +150,10 @@ class FrameCropView extends StatefulWidget {
   /// Defaults to [ZPerspectiveWarp.warpBytes].
   final FrameWarpFunction? warp;
 
+  /// Colour outside a round / oval outline when the result can't keep
+  /// transparency (e.g. the editor saves JPEG). Null: transparent.
+  final Color? outsideFill;
+
   const FrameCropView({
     super.key,
     required this.imageBytes,
@@ -156,6 +174,7 @@ class FrameCropView extends StatefulWidget {
     this.photoChecker,
     this.hintLabels = const ZPhotoHintLabels(),
     this.onRetake,
+    this.outsideFill,
   });
 
   @override
@@ -219,6 +238,9 @@ class _FrameCropViewState extends State<FrameCropView> {
   bool _photoChecked = false;
   bool _hintClosed = false;
 
+  /// Shapes picked with "Wrong?" per chip ([_manualShapeKey]: hand-made).
+  Map<int, ZFrameShape> _shapeOverrides = {};
+
   /// Focal length in display-image pixels from EXIF (null: unknown).
   double? _focalPx;
   bool _focalRead = false;
@@ -239,11 +261,47 @@ class _FrameCropViewState extends State<FrameCropView> {
   List<Offset> _candidateCorners(int i) =>
       ZQuadMath.rotateQuad(_candidates[i].corners, _turns);
 
+  /// Shape of the current outline: the user's pick, else the chip's.
+  ZFrameShape get _shape {
+    final o = _shapeOverrides[_base ?? _manualShapeKey];
+    if (o != null) return o;
+    final b = _base;
+    return b == null || b >= _candidates.length
+        ? ZFrameShape.rectangle
+        : _candidates[b].shape;
+  }
+
+  bool get _isEllipse => _shape != ZFrameShape.rectangle;
+
+  /// The shape label shows when a round / oval outline was found (or the
+  /// user changed a shape).
+  bool get _showShapeLabel =>
+      _shapeOverrides.isNotEmpty ||
+      _candidates.any((c) => c.shape != ZFrameShape.rectangle);
+
+  Future<void> _openShapeMenu() async {
+    final picked = await showZFrameShapeMenu(
+      context,
+      theme: _theme,
+      labels: widget.labels,
+      current: _shape,
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      _userTouched = true;
+      _shapeOverrides = {
+        ..._shapeOverrides,
+        _base ?? _manualShapeKey: picked,
+      };
+    });
+  }
+
   bool get _isFullPhoto =>
       _base == null && !_edited && ZQuadMath.isFullImage(_corners);
 
   bool get _canReset =>
       _turns != 0 ||
+      _shapeOverrides.isNotEmpty ||
       _edited ||
       _base != _defaultBase ||
       (_defaultBase == null && !ZQuadMath.isFullImage(_corners));
@@ -263,6 +321,7 @@ class _FrameCropViewState extends State<FrameCropView> {
       _issue = previous.photoIssue;
       _photoChecked = previous.photoChecked;
       _hintClosed = previous.hintClosed;
+      _shapeOverrides = Map.of(previous.shapeOverrides);
     }
     _size ??= widget.knownSize?.isExact == true ? widget.knownSize : null;
     _decode();
@@ -310,6 +369,8 @@ class _FrameCropViewState extends State<FrameCropView> {
   double? get _aspectHW {
     final exact = _size;
     if (exact != null) return exact.aspectHW;
+    // A round frame is a circle, however the photo was taken.
+    if (_shape == ZFrameShape.round) return 1;
     final image = _image;
     if (image == null) return null;
     final imgSize = Size(image.width.toDouble(), image.height.toDouble());
@@ -440,6 +501,7 @@ class _FrameCropViewState extends State<FrameCropView> {
         label: c.label,
         score: c.score,
         preselected: c.preselected,
+        shape: c.shape,
       ));
       if (valid.length == kMaxFrameCandidates) break;
     }
@@ -481,6 +543,7 @@ class _FrameCropViewState extends State<FrameCropView> {
     setState(() {
       _userTouched = true;
       _turns = 0;
+      _shapeOverrides = {};
       _base = _defaultBase;
       _edited = false;
       _corners =
@@ -491,9 +554,12 @@ class _FrameCropViewState extends State<FrameCropView> {
   void _moveCorner(int index, Offset delta, Rect fitted) {
     if (_applying) return;
     final moved = List.of(_corners);
-    moved[index] = ZQuadMath.clampUnit(
-      moved[index] + Offset(delta.dx / fitted.width, delta.dy / fitted.height),
-    );
+    final d = Offset(delta.dx / fitted.width, delta.dy / fitted.height);
+    // A round outline's handles sit on its sides (top, right, bottom,
+    // left): dragging one moves that side.
+    for (final i in _isEllipse ? [index, (index + 1) % 4] : [index]) {
+      moved[i] = ZQuadMath.clampUnit(moved[i] + d);
+    }
     // Keep a sane, non-mirrored outline of a minimum size.
     if (!ZQuadMath.isConvex(moved, clockwiseOnly: true) ||
         ZQuadMath.area(moved) < 0.0025) {
@@ -510,8 +576,12 @@ class _FrameCropViewState extends State<FrameCropView> {
     if (_applying || _detecting || _enhancing || _image == null) return;
     final corners = List<Offset>.unmodifiable(_corners);
     final enhanced = _enhanceOn ? _enhancedBytes : null;
-    final aspectHW = widget.sizeTools || _size != null ? _aspectHW : null;
+    final shape = _shape;
+    final ellipse = shape != ZFrameShape.rectangle;
+    final aspectHW =
+        widget.sizeTools || _size != null || ellipse ? _aspectHW : null;
     final aspectWH = aspectHW == null ? null : 1 / aspectHW;
+    final fill = widget.outsideFill?.toARGB32();
     FrameCropResult result(Uint8List? out) => FrameCropResult(
           size: _size,
           outputAspectWH: out == null ? null : aspectWH,
@@ -528,9 +598,11 @@ class _FrameCropViewState extends State<FrameCropView> {
           photoIssue: _issue,
           photoChecked: _photoChecked,
           hintClosed: _hintClosed,
+          shape: shape,
+          shapeOverrides: Map.unmodifiable(_shapeOverrides),
         );
 
-    if (_turns == 0 && ZQuadMath.isFullImage(corners)) {
+    if (!ellipse && _turns == 0 && ZQuadMath.isFullImage(corners)) {
       widget.onContinue(result(enhanced));
       return;
     }
@@ -542,8 +614,8 @@ class _FrameCropViewState extends State<FrameCropView> {
         for (final c in corners) ZQuadMath.unrotatePoint(c, _turns),
       ];
       final warp = widget.warp ??
-          (Uint8List b, List<Offset> c) =>
-              ZPerspectiveWarp.warpBytes(b, c, aspectWH: aspectWH);
+          (Uint8List b, List<Offset> c) => ZPerspectiveWarp.warpBytes(b, c,
+              aspectWH: aspectWH, ellipse: ellipse, outsideFill: fill);
       final bytes = await warp(enhanced ?? widget.imageBytes, source);
       if (!mounted) return;
       widget.onContinue(result(bytes));
@@ -612,6 +684,15 @@ class _FrameCropViewState extends State<FrameCropView> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (_showShapeLabel && !_detecting) ...[
+                  ZFrameShapeLabel(
+                    theme: _theme,
+                    labels: labels,
+                    shape: _shape,
+                    onWrong: _applying ? null : _openShapeMenu,
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 SizedBox(
                   height: math.max(_theme.chipTapHeight, _theme.chipHeight),
                   child: _buildChips(labels),
@@ -773,11 +854,19 @@ class _FrameCropViewState extends State<FrameCropView> {
               fitted.left + c.dx * fitted.width,
               fitted.top + c.dy * fitted.height,
             );
-        final alternatives = [
-          for (var i = 0; i < _candidates.length; i++)
-            if (i != _base || _edited)
-              [for (final c in _candidateCorners(i)) toScreen(c)],
-        ];
+        final alternatives = <List<Offset>>[];
+        final alternativeEllipses = <bool>[];
+        for (var i = 0; i < _candidates.length; i++) {
+          if (i == _base && !_edited) continue;
+          alternatives.add([for (final c in _candidateCorners(i)) toScreen(c)]);
+          final shape = _shapeOverrides[i] ?? _candidates[i].shape;
+          alternativeEllipses.add(shape != ZFrameShape.rectangle);
+        }
+        final ellipse = _isEllipse;
+        final handles = ellipse ? ZQuadMath.ellipseTouchPoints(pts) : pts;
+        final outlineBounds = ellipse
+            ? _boundsOf(ZQuadMath.inscribedEllipse(pts, segments: 48))
+            : _boundsOf(pts);
 
         return Stack(
           key: const Key('z_frame_canvas'),
@@ -794,7 +883,9 @@ class _FrameCropViewState extends State<FrameCropView> {
                     quarterTurns: _turns,
                     fitted: fitted,
                     quad: pts,
+                    ellipse: ellipse,
                     alternatives: alternatives,
+                    alternativeEllipses: alternativeEllipses,
                     dragging: _dragCorner != null,
                     theme: _theme,
                   ),
@@ -803,8 +894,8 @@ class _FrameCropViewState extends State<FrameCropView> {
             ),
             for (var i = 0; i < 4; i++)
               Positioned(
-                left: pts[i].dx - hit / 2,
-                top: pts[i].dy - hit / 2,
+                left: handles[i].dx - hit / 2,
+                top: handles[i].dy - hit / 2,
                 width: hit,
                 height: hit,
                 child: FrameCornerHandle(
@@ -823,7 +914,7 @@ class _FrameCropViewState extends State<FrameCropView> {
                 Positioned.fill(
                   child: FrameMeasurementLines(
                     theme: _theme,
-                    outline: _boundsOf(pts),
+                    outline: outlineBounds,
                     bounds: Size(constraints.maxWidth, constraints.maxHeight),
                     heightLabel:
                         '${shown.isExact ? '' : '≈ '}${formatCm(shown.heightCm)} cm',
@@ -832,7 +923,8 @@ class _FrameCropViewState extends State<FrameCropView> {
                   ),
                 ),
             if (widget.enableMagnifyingGlass && _dragCorner != null)
-              _buildLoupe(image, fitted, pts, _dragCorner!, constraints),
+              _buildLoupe(image, fitted, pts, handles[_dragCorner!], ellipse,
+                  constraints),
           ],
         );
       },
@@ -843,11 +935,11 @@ class _FrameCropViewState extends State<FrameCropView> {
     ui.Image image,
     Rect fitted,
     List<Offset> pts,
-    int corner,
+    Offset focus,
+    bool ellipse,
     BoxConstraints constraints,
   ) {
     final diameter = _theme.loupeDiameter;
-    final focus = pts[corner];
     // Above the finger; below it when there is no room at the top.
     var top = focus.dy - diameter - 48;
     if (top < 0) top = focus.dy + 48;
@@ -866,6 +958,7 @@ class _FrameCropViewState extends State<FrameCropView> {
             quarterTurns: _turns,
             fitted: fitted,
             quad: pts,
+            ellipse: ellipse,
             focus: focus,
             theme: _theme,
           ),
@@ -1054,8 +1147,14 @@ class FrameQuadPainter extends CustomPainter {
   final Rect fitted;
   final List<Offset> quad;
 
+  /// The outline is the ellipse inscribed in [quad] (round / oval frame).
+  final bool ellipse;
+
   /// The other detected outlines (screen coordinates), drawn dashed.
   final List<List<Offset>> alternatives;
+
+  /// Per alternative: drawn as its inscribed ellipse.
+  final List<bool> alternativeEllipses;
   final bool dragging;
   final ZImageEditorTheme theme;
 
@@ -1064,7 +1163,9 @@ class FrameQuadPainter extends CustomPainter {
     required this.quarterTurns,
     required this.fitted,
     required this.quad,
+    this.ellipse = false,
     this.alternatives = const [],
+    this.alternativeEllipses = const [],
     required this.dragging,
     required this.theme,
   });
@@ -1074,7 +1175,7 @@ class FrameQuadPainter extends CustomPainter {
     _paintTurnedImage(
         canvas, image, quarterTurns, fitted, FilterQuality.medium);
 
-    final quadPath = Path()..addPolygon(quad, true);
+    final quadPath = outlinePath(quad, ellipse);
     final dim = Path()
       ..fillType = PathFillType.evenOdd
       ..addRect(fitted)
@@ -1087,7 +1188,7 @@ class FrameQuadPainter extends CustomPainter {
         ),
     );
 
-    if (theme.showGrid) {
+    if (theme.showGrid && !ellipse) {
       final grid = Paint()
         ..color = theme.gridColor
         ..strokeWidth = 1;
@@ -1105,8 +1206,9 @@ class FrameQuadPainter extends CustomPainter {
         ..color = altColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = theme.alternativeOutlineWidth;
-      for (final q in alternatives) {
-        drawDashedPath(canvas, Path()..addPolygon(q, true), alt,
+      for (var i = 0; i < alternatives.length; i++) {
+        final round = i < alternativeEllipses.length && alternativeEllipses[i];
+        drawDashedPath(canvas, outlinePath(alternatives[i], round), alt,
             dash: 4, gap: 3);
       }
     }
@@ -1123,6 +1225,7 @@ class FrameQuadPainter extends CustomPainter {
   @override
   bool shouldRepaint(FrameQuadPainter old) =>
       old.alternatives.length != alternatives.length ||
+      old.ellipse != ellipse ||
       old.image != image ||
       old.quarterTurns != quarterTurns ||
       old.fitted != fitted ||
@@ -1137,6 +1240,7 @@ class FrameLoupePainter extends CustomPainter {
   final int quarterTurns;
   final Rect fitted;
   final List<Offset> quad;
+  final bool ellipse;
   final Offset focus;
   final ZImageEditorTheme theme;
 
@@ -1145,6 +1249,7 @@ class FrameLoupePainter extends CustomPainter {
     required this.quarterTurns,
     required this.fitted,
     required this.quad,
+    this.ellipse = false,
     required this.focus,
     required this.theme,
   });
@@ -1171,7 +1276,7 @@ class FrameLoupePainter extends CustomPainter {
     canvas.translate(-focus.dx, -focus.dy);
     _paintTurnedImage(canvas, image, quarterTurns, fitted, FilterQuality.high);
     canvas.drawPath(
-      Path()..addPolygon(quad, true),
+      outlinePath(quad, ellipse),
       Paint()
         ..color = theme.quadColor
         ..style = PaintingStyle.stroke
@@ -1202,6 +1307,12 @@ class FrameLoupePainter extends CustomPainter {
       old.quarterTurns != quarterTurns ||
       !_sameQuad(old.quad, quad);
 }
+
+/// The outline of [quad]: the quad itself, or with [ellipse] the ellipse
+/// inscribed in it.
+Path outlinePath(List<Offset> quad, bool ellipse) => ellipse
+    ? (Path()..addPolygon(ZQuadMath.inscribedEllipse(quad), true))
+    : (Path()..addPolygon(quad, true));
 
 Rect _boundsOf(List<Offset> pts) {
   var l = pts.first.dx, t = pts.first.dy, r = l, b = t;

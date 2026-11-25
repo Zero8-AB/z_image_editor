@@ -4,6 +4,7 @@
 
 ### Features
 
+* round and oval frames (`ZFrameShape`, `ZFrameCandidate.shape`, `ZFrameShapeLabel`, `showZFrameShapeMenu`, `roundFrameFill`): the detector's shape per outline; elliptical outline with four side handles; "Round frame found · Wrong?" with a Rectangle / Round / Oval menu (no shape buttons); round outlines are rectified to a circle; outside the ellipse is transparent (filled with #F5F0F0 for JPEG output); square common sizes (50 × 50 …)
 * "Auto" colour fix in the themed Adjust tab (`enableAutoFix`, `ZAutoLevels`, `ZAutoFixLabels`): per-channel black/white stretch, white balance from the white mat, mild contrast; turns itself on for hazy photos (lifted blacks with a short range, or a tinted mat), one tap turns it off, Before/After drag-compare, part of the export
 * frame step restyled per the approved design: dashed alternative outlines, ringed handles, 44 px chip tap areas, new line icons
 * artwork size tools (`enableSizeTools`, `artworkSize`, `onArtworkSizeConfirmed`): Size tool, red measurement lines (≈ estimated / exact), "Real size of the artwork" sheet with common sizes, auto-fill of the other side and depth picks

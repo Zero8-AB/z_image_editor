@@ -542,3 +542,28 @@ and the pixel fallback apply exactly the same transform. The automatic
 first setting is not an undo step; the user's taps are. The compare
 overlay in `ImageCanvas` (`showCompare`) clips the adjusted image from the
 split line and shows the unadjusted one to its left.
+
+## 19. Round and Oval Frames
+
+`ZFrameCandidate.shape` (`ZFrameShape.rectangle | round | oval`) travels
+with each outline; the four corners stay the source of truth for every
+shape, so turning, chips, dragging, the warp and reopening work unchanged.
+The ellipse is the unit square's inscribed circle mapped through
+`ZQuadMath.squareToQuad` (`inscribedEllipse`, `ellipseTouchPoints`), so
+after the perspective warp it is exactly the ellipse inscribed in the
+output rectangle. A round outline's aspect is forced to 1 (unless an exact
+size is known), so it comes out as a circle; `ZPerspectiveWarp.maskEllipse`
+then clears (or fills) everything outside it with a one-pixel anti-aliased
+edge.
+
+The current shape is `shapeOverrides[base ?? -1] ?? candidates[base].shape`.
+"Wrong?" writes an override for the current outline; Reset clears them.
+`FrameCropResult.shape` / `shapeOverrides` restore the step on "‹ Frame",
+and a changed shape counts as a changed outline.
+
+Transparency survives the upload in the Monogram app (checked on
+2026-11-25): the editor saves PNG (`ImageOutputFormat.auto`), the app
+re-encodes large photos to WebP (alpha kept), the API stores the uploaded
+bytes unchanged (SkiaSharp only reads the dimensions) and imgproxy serves
+`f:webp` variants. Only JPEG output (and imgproxy's JPEG PDF thumbnails)
+lose alpha, hence `roundFrameFill`.
