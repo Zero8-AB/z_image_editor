@@ -30,6 +30,7 @@ screens: see `TESTS.md` in the Monogram app.
 | 2 | Next / Cancel | `frame_step_design_test` › Next and Cancel; `frame_crop_view_test` › Continue warps…, Cancel calls onCancel, Next is disabled and busy while the detector runs |
 | 3 | Size tool label (≈ … · Check / exact) | `frame/frame_size_tools_test.dart` › estimated: "≈ … · Check" and ≈ lines, known size: no ≈…, no matching size: "Size · Check" |
 | 3 | Measurement lines (≈ vs confirmed), inside the screen | `frame_size_tools_test` › estimated…, Size opens the sheet; Confirm locks the size, lines stay inside the screen for a full-width outline |
+| 3 | Lines on a small outline (label only, scaled) | `frame/measurement_lines_test.dart` › a large outline…; an outline shorter than its label: label only, scaled down |
 | 5 | Right shape (perspective + EXIF focal) | `frame/rect_aspect_test.dart` (all); `frame_size_tools_test` › known size: … Next gives it the real shape; `artwork_size_test` › warpOutputSize keeps the real shape when given |
 | 7 | Photo hint banner: copy + icon per issue, only one | `frame/photo_hint_test.dart` › {issue}: exact copy, its icon, one banner; no issue: no banner |
 | 7 | Retake | `photo_hint_test` › Retake calls back and keeps the hint; without onRetake there is no Retake |

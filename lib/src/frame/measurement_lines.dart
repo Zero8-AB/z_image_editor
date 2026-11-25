@@ -57,6 +57,24 @@ class FrameMeasurementLines extends StatelessWidget {
       return vertical ? RotatedBox(quarterTurns: 3, child: label) : label;
     }
 
+    // Natural pill length (text + padding); when the outline is shorter,
+    // only the pill is shown, scaled down to fit.
+    double pillLength(String text) {
+      final tp = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: 1,
+      )..layout();
+      final w = tp.width + 16;
+      tp.dispose();
+      return w;
+    }
+
+    Widget fitted(Widget pill, {required bool vertical}) => Center(
+          child: FittedBox(fit: BoxFit.scaleDown, child: pill),
+        );
+
     Widget line({required bool vertical}) => Expanded(
           child: Container(
             width: vertical ? 1 : null,
@@ -74,34 +92,46 @@ class FrameMeasurementLines extends StatelessWidget {
             top: outline.top,
             width: _thickness,
             height: math.max(0, outline.height),
-            child: Column(
-              key: const Key('z_frame_height_line'),
-              children: [
-                line(vertical: true),
-                const SizedBox(height: 4),
-                pill(heightLabel,
-                    vertical: true, key: const Key('z_frame_height_label')),
-                const SizedBox(height: 4),
-                line(vertical: true),
-              ],
-            ),
+            child: outline.height < pillLength(heightLabel) + 8
+                ? fitted(
+                    pill(heightLabel,
+                        vertical: true, key: const Key('z_frame_height_label')),
+                    vertical: true)
+                : Column(
+                    key: const Key('z_frame_height_line'),
+                    children: [
+                      line(vertical: true),
+                      const SizedBox(height: 4),
+                      pill(heightLabel,
+                          vertical: true,
+                          key: const Key('z_frame_height_label')),
+                      const SizedBox(height: 4),
+                      line(vertical: true),
+                    ],
+                  ),
           ),
           Positioned(
             left: outline.left,
             top: math.max(0, hy),
             width: math.max(0, outline.width),
             height: _thickness,
-            child: Row(
-              key: const Key('z_frame_width_line'),
-              children: [
-                line(vertical: false),
-                const SizedBox(width: 4),
-                pill(widthLabel,
-                    vertical: false, key: const Key('z_frame_width_label')),
-                const SizedBox(width: 4),
-                line(vertical: false),
-              ],
-            ),
+            child: outline.width < pillLength(widthLabel) + 8
+                ? fitted(
+                    pill(widthLabel,
+                        vertical: false, key: const Key('z_frame_width_label')),
+                    vertical: false)
+                : Row(
+                    key: const Key('z_frame_width_line'),
+                    children: [
+                      line(vertical: false),
+                      const SizedBox(width: 4),
+                      pill(widthLabel,
+                          vertical: false,
+                          key: const Key('z_frame_width_label')),
+                      const SizedBox(width: 4),
+                      line(vertical: false),
+                    ],
+                  ),
           ),
         ],
       ),

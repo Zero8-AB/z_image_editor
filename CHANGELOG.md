@@ -20,6 +20,7 @@
 
 ### Bug Fixes
 
+* measurement lines no longer overflow when the outline is shorter than its label (the label is shown alone, scaled down)
 * unmodified images are returned as a byte-identical copy in a new temp file with the correct extension (from the magic bytes), never as the caller's own `File` and never as `.tmp`
 * undo/redo map the crop rect to the current canvas size
 * unmodified images are returned without re-encoding again (the initial fitted crop rect counted as an edit)
