@@ -10,6 +10,8 @@ import 'package:z_image_editor/src/frame/frame_crop_view.dart';
 import 'package:z_image_editor/src/frame/size_sheet.dart';
 import 'package:z_image_editor/src/frame/photo_hint_banner.dart';
 import 'package:z_image_editor/src/frame/photo_quality.dart';
+import 'package:z_image_editor/src/utils/auto_levels.dart';
+import 'package:z_image_editor/src/widgets/themed_adjust_controls.dart';
 import 'package:z_image_editor/src/frame/frame_detector.dart';
 import 'package:z_image_editor/src/models/adjust_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_tab_settings.dart';
@@ -144,6 +146,15 @@ class ZImageEditor extends StatefulWidget {
   /// photo. Null hides Retake (Use anyway and the cross remain).
   final VoidCallback? onRetake;
 
+  /// Offer "Auto" (black/white stretch, white balance from the white mat,
+  /// mild contrast) first in the Adjust tab of the themed look
+  /// ([ZImageEditorTheme.toolRowTabs]). It turns itself on when the photo
+  /// looks hazy; one tap turns it off. Part of the export.
+  final bool enableAutoFix;
+
+  /// Texts of the themed Adjust tab and the Before/After compare.
+  final ZAutoFixLabels autoFixLabels;
+
   /// Colours, fonts and sizes of the editor chrome and the frame step.
   /// The default reproduces the original look.
   final ZImageEditorTheme theme;
@@ -179,6 +190,8 @@ class ZImageEditor extends StatefulWidget {
     this.photoChecker,
     this.photoHintLabels = const ZPhotoHintLabels(),
     this.onRetake,
+    this.enableAutoFix = false,
+    this.autoFixLabels = const ZAutoFixLabels(),
   })  : assert(
           imageFiles != null || imageBytesList != null,
           'Provide imageFiles or imageBytesList.',
@@ -204,6 +217,16 @@ class _ZImageEditorState extends State<ZImageEditor> {
   // ── Multi-image state ─────────────────────────────────────────────────────
 
   int _currentIndex = 0;
+
+  // ── Auto fix ─────────────────────────────────────────────────────────────
+  /// Auto levels for the current image (null: none / not analysed yet).
+  ZAutoLevels? _autoFix;
+  bool _autoForHaze = false;
+  int _autoToken = 0;
+  ZAdjustPanel _adjustPanel = ZAdjustPanel.brightness;
+
+  /// Images on which the user turned Auto off (it then stays off).
+  final Set<int> _autoOffByUser = {};
   final List<File> _processedImages = [];
   // Web: accumulates PNG bytes across multi-image sessions.
   final List<Uint8List> _processedImageBytes = [];
@@ -297,9 +320,39 @@ class _ZImageEditorState extends State<ZImageEditor> {
       _controller.setContrast(kept.contrast);
       _controller.setSaturation(kept.saturation);
     }
+    _analyzeAuto(keepOn: _frameReopened && kept.autoLevels != null);
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
+  }
+
+  /// Analyses the current image for Auto; turns it on when the photo looks
+  /// hazy (unless the user turned it off on this image) or when [keepOn].
+  Future<void> _analyzeAuto({bool keepOn = false}) async {
+    if (!widget.enableAutoFix) return;
+    final token = ++_autoToken;
+    final index = _currentIndex;
+    // Callers rebuild anyway (also called from initState: no setState).
+    _autoFix = null;
+    _autoForHaze = false;
+    Uint8List? bytes = _currentImageBytes;
+    try {
+      bytes ??= await _currentImageFile?.readAsBytes();
+    } catch (_) {
+      bytes = null;
+    }
+    final fix = bytes == null ? null : await ZAutoLevels.fromBytes(bytes);
+    if (!mounted || token != _autoToken || index != _currentIndex) return;
+    if (fix == null || fix.isNoop) return;
+    final turnOn = keepOn || (fix.hazy && !_autoOffByUser.contains(index));
+    setState(() {
+      _autoFix = fix;
+      if (turnOn) {
+        _autoForHaze = !keepOn;
+        _adjustPanel = ZAdjustPanel.auto;
+      }
+    });
+    if (turnOn) _controller.setAutoLevels(fix.values, undoable: false);
   }
 
   static bool _sameCorners(List<Offset> a, List<Offset> b) {
@@ -344,7 +397,11 @@ class _ZImageEditorState extends State<ZImageEditor> {
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
-    if (_frameCropEnabled) _enterFrameStep();
+    if (_frameCropEnabled) {
+      _enterFrameStep();
+    } else {
+      _analyzeAuto();
+    }
     if (!kIsWeb) {
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.manual,
@@ -389,7 +446,11 @@ class _ZImageEditorState extends State<ZImageEditor> {
     if (!widget.showCropTab && widget.showAdjustTab) {
       _controller.setTab(EditorTab.adjust);
     }
-    if (_frameCropEnabled) setState(_enterFrameStep);
+    if (_frameCropEnabled) {
+      setState(_enterFrameStep);
+    } else {
+      _analyzeAuto();
+    }
   }
 
   Future<void> _handleSave() async {
@@ -602,6 +663,11 @@ class _ZImageEditorState extends State<ZImageEditor> {
                   controller: _controller,
                   enableMagnifyingGlass: widget.enableMagnifyingGlass,
                   portraitOrientation: _isCropPortrait,
+                  showCompare: widget.theme.toolRowTabs &&
+                      _adjustPanel == ZAdjustPanel.auto,
+                  beforeLabel: widget.autoFixLabels.before,
+                  afterLabel: widget.autoFixLabels.after,
+                  fontFamily: widget.theme.fontFamily,
                 ),
               ),
 
@@ -1376,11 +1442,32 @@ class _ZImageEditorState extends State<ZImageEditor> {
     return IndexedStack(
       index: index,
       children: [
-        AdjustmentControls(
-          accentColor: widget.theme.accentColor,
-          controller: _controller,
-          settings: widget.adjustTabSettings,
-        ),
+        if (widget.theme.toolRowTabs)
+          ThemedAdjustControls(
+            key: const Key('z_adjust_controls'),
+            theme: widget.theme,
+            controller: _controller,
+            settings: widget.adjustTabSettings,
+            labels: widget.autoFixLabels,
+            autoLevels: _autoFix?.values,
+            autoTurnedOnForHaze: _autoForHaze,
+            panel: _adjustPanel,
+            onPanel: (p) => setState(() => _adjustPanel = p),
+            onAutoChanged: (on) => setState(() {
+              _autoForHaze = false;
+              if (on) {
+                _autoOffByUser.remove(_currentIndex);
+              } else {
+                _autoOffByUser.add(_currentIndex);
+              }
+            }),
+          )
+        else
+          AdjustmentControls(
+            accentColor: widget.theme.accentColor,
+            controller: _controller,
+            settings: widget.adjustTabSettings,
+          ),
         CropControls(
           accentColor: widget.theme.accentColor,
           controller: _controller,

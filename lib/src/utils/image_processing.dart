@@ -190,13 +190,12 @@ class ImageProcessing {
 
     // Color adjustments via paint colorFilter (matches live preview exactly).
     final paint = Paint()..filterQuality = FilterQuality.high;
-    if (state.brightness != 0 ||
-        state.contrast != 1.0 ||
-        state.saturation != 1.0) {
+    if (state.hasColorChanges) {
       paint.colorFilter = ColorFilterMatrix.combined(
         brightness: state.brightness,
         contrast: state.contrast,
         saturation: state.saturation,
+        auto: state.autoLevels,
       );
     }
 
@@ -331,6 +330,7 @@ class ImageProcessing {
       brightness: state.brightness,
       contrast: state.contrast,
       saturation: state.saturation,
+      auto: state.autoLevels,
     );
 
     if (outputFormat == ImageOutputFormat.jpeg) {
@@ -372,6 +372,7 @@ class ImageProcessing {
       brightness: state.brightness,
       contrast: state.contrast,
       saturation: state.saturation,
+      auto: state.autoLevels,
     );
 
     final tempDir = Directory.systemTemp;
@@ -459,12 +460,19 @@ class ImageProcessing {
     required double brightness,
     required double contrast,
     required double saturation,
+    List<double>? auto,
   }) {
-    if (brightness == 0 && contrast == 1.0 && saturation == 1.0) return image;
+    if (auto == null &&
+        brightness == 0 &&
+        contrast == 1.0 &&
+        saturation == 1.0) {
+      return image;
+    }
     final m = ColorFilterMatrix.combinedMatrix(
       brightness: brightness,
       contrast: contrast,
       saturation: saturation,
+      auto: auto,
     );
     for (final p in image) {
       final r = p.r.toDouble(), g = p.g.toDouble(), b = p.b.toDouble();
@@ -590,19 +598,43 @@ class ColorFilterMatrix {
     required double brightness,
     required double contrast,
     required double saturation,
+    List<double>? auto,
   }) =>
       ColorFilter.matrix(combinedMatrix(
         brightness: brightness,
         contrast: contrast,
         saturation: saturation,
+        auto: auto,
       ));
 
-  /// The 4x5 row-major matrix behind [combined].
+  /// The 4x5 row-major matrix behind [combined]. [auto] (R, G, B gains then
+  /// offsets) is applied first.
   static List<double> combinedMatrix({
     required double brightness,
     required double contrast,
     required double saturation,
+    List<double>? auto,
   }) {
+    final m = _userMatrix(brightness, contrast, saturation);
+    if (auto == null) return m;
+    // M · (diag(g) x + o) = (M · diag(g)) x + (M · o + t)
+    final out = List<double>.of(m);
+    for (var row = 0; row < 4; row++) {
+      var t = m[row * 5 + 4];
+      for (var c = 0; c < 3; c++) {
+        out[row * 5 + c] = m[row * 5 + c] * auto[c];
+        t += m[row * 5 + c] * auto[3 + c];
+      }
+      out[row * 5 + 4] = t;
+    }
+    return out;
+  }
+
+  static List<double> _userMatrix(
+    double brightness,
+    double contrast,
+    double saturation,
+  ) {
     // Combine all filters
     final b = brightness / 100;
     final c = contrast;

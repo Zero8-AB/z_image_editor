@@ -13,6 +13,9 @@ export 'src/frame/size_sheet.dart';
 export 'src/frame/tip_sheet.dart';
 export 'src/frame/photo_quality.dart';
 export 'src/frame/photo_hint_banner.dart';
+export 'src/utils/auto_levels.dart';
+export 'src/widgets/themed_adjust_controls.dart'
+    show ZAutoFixLabels, ZAdjustPanel;
 export 'src/frame/perspective_warp.dart';
 
 // Models (for advanced usage)

@@ -29,6 +29,11 @@ class ImageEditorState {
   final double
       tiltVertical; // keystone tilt −30…+30 (positive = bottom recedes)
 
+  /// "Auto" colour fix as 6 numbers (R, G, B gains then offsets; see
+  /// `ZAutoLevels`), applied before brightness/contrast/saturation. Null =
+  /// off.
+  final List<double>? autoLevels;
+
   const ImageEditorState({
     this.imageFile,
     this.imageBytes,
@@ -49,6 +54,7 @@ class ImageEditorState {
     this.aspectRatioPreset = AspectRatioPreset.free,
     this.tiltHorizontal = 0.0,
     this.tiltVertical = 0.0,
+    this.autoLevels,
   });
 
   ImageEditorState copyWith({
@@ -72,6 +78,8 @@ class ImageEditorState {
     AspectRatioPreset? aspectRatioPreset,
     double? tiltHorizontal,
     double? tiltVertical,
+    List<double>? autoLevels,
+    bool clearAutoLevels = false,
   }) {
     return ImageEditorState(
       imageFile: imageFile ?? this.imageFile,
@@ -93,10 +101,19 @@ class ImageEditorState {
       aspectRatioPreset: aspectRatioPreset ?? this.aspectRatioPreset,
       tiltHorizontal: tiltHorizontal ?? this.tiltHorizontal,
       tiltVertical: tiltVertical ?? this.tiltVertical,
+      autoLevels: clearAutoLevels ? null : (autoLevels ?? this.autoLevels),
     );
   }
 
+  /// Whether any colour change applies (Auto or the sliders).
+  bool get hasColorChanges =>
+      autoLevels != null ||
+      brightness != 0.0 ||
+      contrast != 1.0 ||
+      saturation != 1.0;
+
   bool get hasChanges =>
+      autoLevels != null ||
       brightness != 0.0 ||
       contrast != 1.0 ||
       saturation != 1.0 ||

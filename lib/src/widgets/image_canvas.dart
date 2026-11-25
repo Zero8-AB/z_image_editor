@@ -21,6 +21,12 @@ class ImageCanvas extends StatefulWidget {
   /// Whether the aspect-ratio presets should be applied in portrait orientation.
   final bool portraitOrientation;
 
+  /// In the Adjust tab with Auto on: a Before/After split the user drags.
+  final bool showCompare;
+  final String beforeLabel;
+  final String afterLabel;
+  final String? fontFamily;
+
   const ImageCanvas({
     super.key,
     this.imageFile,
@@ -28,6 +34,10 @@ class ImageCanvas extends StatefulWidget {
     required this.controller,
     this.enableMagnifyingGlass = false,
     this.portraitOrientation = false,
+    this.showCompare = false,
+    this.beforeLabel = 'Before',
+    this.afterLabel = 'After',
+    this.fontFamily,
   });
 
   @override
@@ -46,6 +56,9 @@ class _ImageCanvasState extends State<ImageCanvas>
 
   /// Drives the canvas background fade when the user drags a crop handle.
   bool _isDraggingCropHandle = false;
+
+  /// Before/After split (0 = all After, 1 = all Before), from the left.
+  double _compareSplit = 0.5;
 
   // ── Snap-to-viewport timer ────────────────────────────────────────────────
   Timer? _snapTimer;
@@ -487,14 +500,13 @@ class _ImageCanvasState extends State<ImageCanvas>
 
               // ── Color filter (real-time preview) ─────────────────────────
               Widget content = imageWidget;
-              if (state.brightness != 0 ||
-                  state.contrast != 1.0 ||
-                  state.saturation != 1.0) {
+              if (state.hasColorChanges) {
                 content = ColorFiltered(
                   colorFilter: ColorFilterMatrix.combined(
                     brightness: state.brightness,
                     contrast: state.contrast,
                     saturation: state.saturation,
+                    auto: state.autoLevels,
                   ),
                   child: content,
                 );
@@ -564,11 +576,53 @@ class _ImageCanvasState extends State<ImageCanvas>
               // visible image content is exactly what sits inside the crop box
               // in the Crop tab, with no coordinate-space discrepancy.
               if (state.currentTab == EditorTab.adjust) {
+                final compare = widget.showCompare && state.autoLevels != null;
+                final shown = cropVpRect ?? _fittedRect(vpSize);
+                Widget? before;
+                if (compare) {
+                  // A separate image instance without Auto (user sliders
+                  // only), under the same transform.
+                  Widget plain = widget.imageFile != null
+                      ? buildFileImageWidget(widget.imageFile!,
+                          fit: BoxFit.contain)
+                      : Image.memory(widget.imageBytes!, fit: BoxFit.contain);
+                  if (state.brightness != 0 ||
+                      state.contrast != 1.0 ||
+                      state.saturation != 1.0) {
+                    plain = ColorFiltered(
+                      colorFilter: ColorFilterMatrix.combined(
+                        brightness: state.brightness,
+                        contrast: state.contrast,
+                        saturation: state.saturation,
+                      ),
+                      child: plain,
+                    );
+                  }
+                  before = Transform(
+                    alignment: Alignment.center,
+                    transform: displayMatrix,
+                    child: SizedBox(
+                      width: vpSize.width,
+                      height: vpSize.height,
+                      child: plain,
+                    ),
+                  );
+                }
+                final splitX =
+                    shown.left + shown.width * _compareSplit.clamp(0.0, 1.0);
                 return ClipRect(
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      ClipRect(child: transformedImage),
+                      if (before != null) ...[
+                        ClipRect(child: before),
+                        ClipRect(
+                          key: const Key('z_compare_after'),
+                          clipper: _FromXClipper(splitX),
+                          child: transformedImage,
+                        ),
+                      ] else
+                        ClipRect(child: transformedImage),
                       if (cropVpRect != null)
                         Positioned.fill(
                           child: IgnorePointer(
@@ -579,6 +633,22 @@ class _ImageCanvasState extends State<ImageCanvas>
                                 showBorder: false,
                               ),
                             ),
+                          ),
+                        ),
+                      if (before != null)
+                        Positioned.fill(
+                          child: _CompareOverlay(
+                            shown: shown,
+                            splitX: splitX,
+                            beforeLabel: widget.beforeLabel,
+                            afterLabel: widget.afterLabel,
+                            fontFamily: widget.fontFamily,
+                            onDrag: (x) => setState(() {
+                              _compareSplit = shown.width <= 0
+                                  ? 0.5
+                                  : ((x - shown.left) / shown.width)
+                                      .clamp(0.0, 1.0);
+                            }),
                           ),
                         ),
                     ],
@@ -652,14 +722,13 @@ class _ImageCanvasState extends State<ImageCanvas>
                                         fit: BoxFit.contain,
                                       );
                                     }
-                                    if (state.brightness != 0 ||
-                                        state.contrast != 1.0 ||
-                                        state.saturation != 1.0) {
+                                    if (state.hasColorChanges) {
                                       loupeImg = ColorFiltered(
                                         colorFilter: ColorFilterMatrix.combined(
                                           brightness: state.brightness,
                                           contrast: state.contrast,
                                           saturation: state.saturation,
+                                          auto: state.autoLevels,
                                         ),
                                         child: loupeImg,
                                       );
@@ -1666,4 +1735,117 @@ class GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+extension on _ImageCanvasState {
+  /// The image's BoxFit.contain rect in a viewport of [vp].
+  Rect _fittedRect(Size vp) {
+    final img = _imageSize;
+    if (img == null || img.isEmpty) return Offset.zero & vp;
+    final s = math.min(vp.width / img.width, vp.height / img.height);
+    final w = img.width * s, h = img.height * s;
+    return Rect.fromLTWH((vp.width - w) / 2, (vp.height - h) / 2, w, h);
+  }
+}
+
+/// Keeps x ≥ [x] (the After side of the compare split).
+class _FromXClipper extends CustomClipper<Rect> {
+  final double x;
+  _FromXClipper(this.x);
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(x.clamp(0.0, size.width), 0, size.width, size.height);
+
+  @override
+  bool shouldReclip(_FromXClipper old) => old.x != x;
+}
+
+/// Divider, round handle and Before/After pills; horizontal drags move the
+/// split.
+class _CompareOverlay extends StatelessWidget {
+  final Rect shown;
+  final double splitX;
+  final String beforeLabel;
+  final String afterLabel;
+  final String? fontFamily;
+  final ValueChanged<double> onDrag;
+
+  const _CompareOverlay({
+    required this.shown,
+    required this.splitX,
+    required this.beforeLabel,
+    required this.afterLabel,
+    required this.fontFamily,
+    required this.onDrag,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget pill(Key key, String text) => Container(
+          key: key,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xB30B0A0A),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontFamily: fontFamily,
+              fontSize: 12,
+              color: const Color(0xFFFDFDFB),
+              decoration: TextDecoration.none,
+            ),
+          ),
+        );
+    return GestureDetector(
+      key: const Key('z_compare'),
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (d) => onDrag(d.localPosition.dx),
+      onHorizontalDragUpdate: (d) => onDrag(d.localPosition.dx),
+      onTapDown: (d) => onDrag(d.localPosition.dx),
+      child: LayoutBuilder(
+        builder: (context, box) => Stack(
+          children: [
+            Positioned(
+              left: splitX - 1,
+              top: shown.top,
+              width: 2,
+              height: shown.height,
+              child: const ColoredBox(
+                key: Key('z_compare_line'),
+                color: Color(0xFFFDFDFB),
+              ),
+            ),
+            Positioned(
+              left: splitX - 18,
+              top: shown.center.dy - 18,
+              child: Container(
+                key: const Key('z_compare_handle'),
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFDFDFB),
+                  shape: BoxShape.circle,
+                ),
+                child:
+                    const Icon(Icons.code, size: 18, color: Color(0xFF1C1A1A)),
+              ),
+            ),
+            Positioned(
+              left: shown.left + 8,
+              top: shown.top + 8,
+              child: pill(const Key('z_compare_before'), beforeLabel),
+            ),
+            Positioned(
+              right: math.max(0.0, box.maxWidth - shown.right) + 8,
+              top: shown.top + 8,
+              child: pill(const Key('z_compare_after_label'), afterLabel),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

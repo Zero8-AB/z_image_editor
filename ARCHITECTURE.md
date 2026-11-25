@@ -519,3 +519,26 @@ sits between the header and the photo: Retake (only with `onRetake`), Use
 anyway and a 44 px cross; both close it. The fixtures in
 `test/fixtures/photo_quality` come from `tool/make_photo_quality_fixtures.dart`.
 
+
+## 18. Auto Colour Fix
+
+`ZAutoLevels.fromBytes` decodes the current image at 256 px and returns a
+per-channel affine map `out = gain · in + offset`:
+
+1. per-channel stretch of the 0.5 / 99.5 % percentiles to 0..255 (range at
+   least 255 / 2.5, so the gain is capped);
+2. white balance: pixels at or above the 90th luma percentile with a
+   channel spread ≤ 40 (the mat, paper) are averaged after the stretch and
+   each channel is scaled towards their mean (±15 %, at least 1 % of the
+   pixels needed);
+3. contrast ×1.06 around 127.5.
+
+`hazy` = not a no-op and either (1st percentile luma ≥ 28 and
+99th − 1st < 200) or a white-balance correction ≥ 6 % on a channel. The six
+numbers live in `ImageEditorState.autoLevels` and are folded in front of
+the brightness/contrast/saturation matrix
+(`ColorFilterMatrix.combinedMatrix(auto:)`), so the canvas, the GPU export
+and the pixel fallback apply exactly the same transform. The automatic
+first setting is not an undo step; the user's taps are. The compare
+overlay in `ImageCanvas` (`showCompare`) clips the adjusted image from the
+split line and shows the unadjusted one to its left.

@@ -188,6 +188,15 @@ class ImageEditorController extends ChangeNotifier {
     _updateState(_state.copyWith(saturation: value));
   }
 
+  /// Turns the "Auto" colour fix on ([levels], see `ZAutoLevels.values`) or
+  /// off (null). [undoable] false for the automatic first setting.
+  void setAutoLevels(List<double>? levels, {bool undoable = true}) {
+    if (undoable) _pushHistory();
+    _updateState(levels == null
+        ? _state.copyWith(clearAutoLevels: true)
+        : _state.copyWith(autoLevels: List.unmodifiable(levels)));
+  }
+
   // Rotation controls
   void rotate90() {
     _pushHistory();
