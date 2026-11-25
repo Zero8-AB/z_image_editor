@@ -66,6 +66,10 @@ lib/
     │   ├── frame_detector.dart          — ZFrameDetector / ZFrameCandidate / ZImageEnhancer / ZFrameCropLabels
     │   ├── quad_math.dart               — ZQuadMath: ordering, convexity, homography, quarter turns
     │   ├── perspective_warp.dart        — ZPerspectiveWarp: full-resolution rectification (pure Dart)
+    │   ├── rect_aspect.dart             — ZRectAspect: real W:H of a photographed rectangle (Zhang–He)
+    │   ├── artwork_size.dart            — ZArtworkSize, common sizes, best fit, depth presets
+    │   ├── size_sheet.dart              — "Real size of the artwork" sheet
+    │   ├── measurement_lines.dart       — red size lines next to the outline
     │   └── frame_crop_view.dart         — the frame step UI (FrameCropView + small presentational widgets)
     ├── theme/
     │   ├── z_image_editor_theme.dart    — ZImageEditorTheme: all chrome colours/fonts/sizes
@@ -471,3 +475,22 @@ header buttons (`ZPrimaryButton`, `ZSecondaryButton`), chips (`ZChip`),
 tool rows (`ZToolButton` + `ZLineIcon`), tabs and the frame step painters.
 The default constructor reproduces the original look. Layout code never
 hard-codes a colour, so a new visual design is a new theme object.
+
+## 16. Artwork Size and Shape
+
+`FrameCropView` keeps an exact size (`_size`: details, measured or
+confirmed) or derives an estimate:
+
+```
+aspect H:W = exact size ?? 1 / ZRectAspect.widthOverHeight(quad px, image, focal)
+                        ?? side averages
+shown size = exact ?? ZCommonSizes.bestFit(aspect)   (≈, only within 5 %)
+```
+
+`ZRectAspect` implements Zhang & He (2007): with corners m1..m4 (TL, TR,
+BL, BR) and the principal point at the image centre it computes
+k2, k3, n2 = k2·m2 − m1, n3 = k3·m3 − m1, solves the focal length from
+n2/n3 when no EXIF focal length is given (rejecting implausible values),
+and returns √(‖A⁻¹n2‖² / ‖A⁻¹n3‖²). On Next the warp receives
+`aspectWH = 1 / aspect` and `ZQuadMath.warpOutputSize` keeps the longer
+measured side and derives the other from it.

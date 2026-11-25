@@ -109,10 +109,26 @@ class ZQuadMath {
   ///
   /// When [maxSide] is given the result is scaled down (keeping the aspect
   /// ratio) so neither side exceeds it.
-  static Size warpOutputSize(List<Offset> pixelQuad, {int? maxSide}) {
+  ///
+  /// With [aspectWH] (the real width / height, e.g. from the artwork's size
+  /// or a perspective estimate) the output keeps the longer of the measured
+  /// sides and takes the other from that ratio, so the result is not
+  /// stretched.
+  static Size warpOutputSize(
+    List<Offset> pixelQuad, {
+    int? maxSide,
+    double? aspectWH,
+  }) {
     final q = pixelQuad;
     var w = math.max((q[1] - q[0]).distance, (q[2] - q[3]).distance);
     var h = math.max((q[3] - q[0]).distance, (q[2] - q[1]).distance);
+    if (aspectWH != null && aspectWH > 0 && aspectWH.isFinite) {
+      if (w >= h) {
+        h = w / aspectWH;
+      } else {
+        w = h * aspectWH;
+      }
+    }
     w = math.max(1, w.roundToDouble());
     h = math.max(1, h.roundToDouble());
     if (maxSide != null && math.max(w, h) > maxSide) {

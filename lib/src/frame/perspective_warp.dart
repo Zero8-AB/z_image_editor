@@ -29,13 +29,14 @@ class ZPerspectiveWarp {
     List<Offset> corners, {
     int jpegQuality = 95,
     int? maxSide = defaultMaxOutputSide,
+    double? aspectWH,
   }) {
     final flat = <double>[
       for (final c in corners) ...[c.dx, c.dy]
     ];
     return compute(
       _warpEntry,
-      _WarpJob(bytes, flat, jpegQuality, maxSide),
+      _WarpJob(bytes, flat, jpegQuality, maxSide, aspectWH),
       debugLabel: 'z_image_editor frame warp',
     );
   }
@@ -46,6 +47,7 @@ class ZPerspectiveWarp {
     List<Offset> corners, {
     int jpegQuality = 95,
     int? maxSide = defaultMaxOutputSide,
+    double? aspectWH,
   }) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) {
@@ -67,7 +69,7 @@ class ZPerspectiveWarp {
     final pixelQuad = [
       for (final c in corners) Offset(c.dx * src.width, c.dy * src.height),
     ];
-    final out = warpImage(src, pixelQuad, maxSide: maxSide);
+    final out = warpImage(src, pixelQuad, maxSide: maxSide, aspectWH: aspectWH);
     return out.numChannels == 4
         ? img.encodePng(out)
         : img.encodeJpg(out, quality: jpegQuality);
@@ -81,6 +83,7 @@ class ZPerspectiveWarp {
     img.Image src,
     List<Offset> pixelQuad, {
     int? maxSide,
+    double? aspectWH,
   }) {
     final channels = src.hasAlpha ? 4 : 3;
     // Palette (indexed, incl. 1/2/4-bit) and non-8-bit images are expanded
@@ -99,7 +102,11 @@ class ZPerspectiveWarp {
     );
     final sw = rgb.width, sh = rgb.height;
 
-    final size = ZQuadMath.warpOutputSize(pixelQuad, maxSide: maxSide);
+    final size = ZQuadMath.warpOutputSize(
+      pixelQuad,
+      maxSide: maxSide,
+      aspectWH: aspectWH,
+    );
     final ow = size.width.toInt(), oh = size.height.toInt();
     final m = ZQuadMath.squareToQuad(pixelQuad);
     final a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5];
@@ -151,7 +158,14 @@ class _WarpJob {
   final List<double> corners;
   final int jpegQuality;
   final int? maxSide;
-  const _WarpJob(this.bytes, this.corners, this.jpegQuality, this.maxSide);
+  final double? aspectWH;
+  const _WarpJob(
+    this.bytes,
+    this.corners,
+    this.jpegQuality,
+    this.maxSide,
+    this.aspectWH,
+  );
 }
 
 Uint8List _warpEntry(_WarpJob job) {
@@ -164,5 +178,6 @@ Uint8List _warpEntry(_WarpJob job) {
     corners,
     jpegQuality: job.jpegQuality,
     maxSide: job.maxSide,
+    aspectWH: job.aspectWH,
   );
 }

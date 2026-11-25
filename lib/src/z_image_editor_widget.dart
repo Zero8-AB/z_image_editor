@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:z_image_editor/src/controller/image_editor_controller.dart';
+import 'package:z_image_editor/src/frame/artwork_size.dart';
 import 'package:z_image_editor/src/frame/frame_crop_view.dart';
+import 'package:z_image_editor/src/frame/size_sheet.dart';
 import 'package:z_image_editor/src/frame/frame_detector.dart';
 import 'package:z_image_editor/src/models/adjust_tab_settings.dart';
 import 'package:z_image_editor/src/models/crop_tab_settings.dart';
@@ -114,6 +116,21 @@ class ZImageEditor extends StatefulWidget {
   /// Texts of the frame step.
   final ZFrameCropLabels frameCropLabels;
 
+  /// Show the artwork-size tools in the frame step: the Size button, red
+  /// measurement lines (with [ZImageEditorTheme.showMeasurements]) and the
+  /// size sheet; the straightened image then keeps the real shape.
+  final bool enableSizeTools;
+
+  /// Size known up front (artwork details, or measured). Exact sizes are
+  /// shown without "≈" and give the straightened image its shape.
+  final ZArtworkSize? artworkSize;
+
+  /// Called when the user confirms a size in the size sheet.
+  final ValueChanged<ZArtworkSize>? onArtworkSizeConfirmed;
+
+  /// Texts of the size sheet.
+  final ZSizeSheetLabels sizeSheetLabels;
+
   /// Colours, fonts and sizes of the editor chrome and the frame step.
   /// The default reproduces the original look.
   final ZImageEditorTheme theme;
@@ -142,6 +159,10 @@ class ZImageEditor extends StatefulWidget {
     this.imageEnhancer,
     this.frameCropLabels = const ZFrameCropLabels(),
     this.theme = const ZImageEditorTheme(),
+    this.enableSizeTools = false,
+    this.artworkSize,
+    this.onArtworkSizeConfirmed,
+    this.sizeSheetLabels = const ZSizeSheetLabels(),
   })  : assert(
           imageFiles != null || imageBytesList != null,
           'Provide imageFiles or imageBytesList.',
@@ -217,6 +238,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
   void _onFrameContinue(FrameCropResult result) {
     final previous = _frameResults[_currentIndex];
+    final size = result.size;
+    if (size != null &&
+        size.source == ZSizeSource.confirmed &&
+        size != previous?.size) {
+      widget.onArtworkSizeConfirmed?.call(size);
+    }
     // Reopened and nothing changed: keep the editor's crop/adjust edits.
     final unchanged = _frameReopened &&
         previous != null &&
@@ -520,6 +547,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
           resetLabel: widget.resetLabel,
           enableMagnifyingGlass: true,
           previous: previous,
+          sizeTools: widget.enableSizeTools,
+          knownSize: widget.artworkSize,
+          sizeLabels: widget.sizeSheetLabels,
           onCancel: _frameReopened
               ? () => setState(() => _inFrameStep = false)
               : widget.onCancel,

@@ -115,6 +115,12 @@ class ZFrameCropLabels {
   /// Shown when the detector found nothing (or none is set).
   final String manualHint;
 
+  /// Appended to an estimated size on the Size tool ("≈ 50 × 40 cm · Check").
+  final String sizeCheckSuffix;
+
+  /// Size tool label when no size can be estimated.
+  final String sizeUnknownLabel;
+
   const ZFrameCropLabels({
     this.title = 'Choose the frame',
     this.editorTitle = 'Edit photo',
@@ -125,5 +131,7 @@ class ZFrameCropLabels {
     this.editedSuffix = ' · edited',
     this.detectingLabel = 'Finding the edges…',
     this.manualHint = 'Drag the corners to the edges you want to keep.',
+    this.sizeCheckSuffix = ' · Check',
+    this.sizeUnknownLabel = 'Size · Check',
   });
 }

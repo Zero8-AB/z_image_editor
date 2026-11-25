@@ -349,6 +349,35 @@ ZImageEditor(
 - Web: works (the warp is pure Dart); pass no native detector there.
 - `ZQuadMath` and `ZPerspectiveWarp` are exported for detectors and tests.
 
+### Artwork size and the right shape
+
+With `enableSizeTools: true` the frame step shows a **Size** tool first in
+the tool row, red measurement lines next to the outline
+(`ZImageEditorTheme.showMeasurements`) and a "Real size of the artwork"
+sheet (height × width × depth, common sizes, depth quick picks).
+
+- The straightened image keeps the artwork's **real shape**: from an exact
+  size (`artworkSize`, e.g. from the artwork details, or one the user
+  confirms), else estimated from the outline's perspective
+  (`ZRectAspect`, Zhang–He; focal length from EXIF
+  `FocalLengthIn35mmFilm`, else solved from the outline, else a 26 mm
+  phone lens), else from the average side lengths.
+- Estimates show "≈" ("≈ 50 × 40 cm · Check", "≈ 50 cm"): the best-fitting
+  common size (40×30, 50×40, 70×50, 100×70, A3, A4; landscape versions
+  for wide art) when its shape matches within 5 %. Exact sizes show
+  without "≈" and a lock icon.
+- `onArtworkSizeConfirmed` reports a size the user confirmed (after Next).
+
+```dart
+ZImageEditor(
+  enableSizeTools: true,
+  artworkSize: const ZArtworkSize(
+      heightCm: 50, widthCm: 40, depthCm: 2, source: ZSizeSource.details),
+  onArtworkSizeConfirmed: (size) => saveToForm(size),
+  ...
+)
+```
+
 ### Theme
 
 `ZImageEditorTheme` holds every colour, font and size of the chrome (header

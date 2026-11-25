@@ -9,9 +9,13 @@ import 'package:flutter/material.dart' show Material;
 
 import '../theme/themed_controls.dart';
 import '../theme/z_image_editor_theme.dart';
+import 'artwork_size.dart';
 import 'frame_detector.dart';
+import 'measurement_lines.dart';
 import 'perspective_warp.dart';
 import 'quad_math.dart';
+import 'rect_aspect.dart';
+import 'size_sheet.dart';
 
 /// At most this many outline chips are shown, whatever the detector returns.
 const int kMaxFrameCandidates = 3;
@@ -51,7 +55,16 @@ class FrameCropResult {
   /// Whether the enhancer already ran.
   final bool enhancerRan;
 
+  /// The size the user confirmed (or that was known/measured); null when
+  /// only estimated.
+  final ZArtworkSize? size;
+
+  /// Width / height the straightened image was given (null: no warp).
+  final double? outputAspectWH;
+
   const FrameCropResult({
+    this.size,
+    this.outputAspectWH,
     required this.outputBytes,
     required this.corners,
     required this.candidates,
@@ -89,6 +102,13 @@ class FrameCropView extends StatefulWidget {
   /// State to restore when the step is reopened.
   final FrameCropResult? previous;
 
+  /// Show the Size tool, the measurement lines and the size sheet.
+  final bool sizeTools;
+
+  /// Size known before the step (artwork details or measured).
+  final ZArtworkSize? knownSize;
+  final ZSizeSheetLabels sizeLabels;
+
   final VoidCallback onCancel;
   final ValueChanged<FrameCropResult> onContinue;
 
@@ -109,6 +129,9 @@ class FrameCropView extends StatefulWidget {
     this.enableMagnifyingGlass = true,
     this.previous,
     this.warp,
+    this.sizeTools = false,
+    this.knownSize,
+    this.sizeLabels = const ZSizeSheetLabels(),
   });
 
   @override
@@ -164,6 +187,13 @@ class _FrameCropViewState extends State<FrameCropView> {
   int? _dragCorner;
   bool _applying = false;
 
+  /// Exact size (details, measured or confirmed); null = estimate only.
+  ZArtworkSize? _size;
+
+  /// Focal length in display-image pixels from EXIF (null: unknown).
+  double? _focalPx;
+  bool _focalRead = false;
+
   ZImageEditorTheme get _theme => widget.theme;
 
   ui.Image? get _displayImage =>
@@ -200,7 +230,9 @@ class _FrameCropViewState extends State<FrameCropView> {
       _edited = previous.edited;
       _userTouched = true;
       _enhanceOn = previous.enhanceOn;
+      _size = previous.size;
     }
+    _size ??= widget.knownSize?.isExact == true ? widget.knownSize : null;
     _decode();
     if (previous != null && previous.detectionDone) {
       _setCandidates(previous.candidates);
@@ -235,6 +267,66 @@ class _FrameCropViewState extends State<FrameCropView> {
     } catch (_) {
       if (mounted) setState(() => _decodeFailed = true);
     }
+  }
+
+  /// Real height / width of the current outline: the exact size when known,
+  /// else a perspective estimate (focal length from EXIF, or solved), else
+  /// the average side lengths.
+  double? get _aspectHW {
+    final exact = _size;
+    if (exact != null) return exact.aspectHW;
+    final image = _image;
+    if (image == null) return null;
+    final imgSize = Size(image.width.toDouble(), image.height.toDouble());
+    if (!_focalRead) {
+      _focalRead = true;
+      _focalPx = ZRectAspect.focalPxFromExif(widget.imageBytes, imgSize);
+    }
+    final px = [
+      for (final c in _corners)
+        () {
+          final o = ZQuadMath.unrotatePoint(c, _turns);
+          return Offset(o.dx * imgSize.width, o.dy * imgSize.height);
+        }(),
+    ];
+    final wh = ZRectAspect.widthOverHeight(px, imgSize, focalPx: _focalPx) ??
+        ZRectAspect.sideAverage(px);
+    // Quarter turns swap what the screen shows as width and height.
+    return wh <= 0 ? null : 1 / wh;
+  }
+
+  /// The size to show: exact, or the best-fitting common size (≈).
+  ZArtworkSize? get _shownSize {
+    if (_size != null) return _size;
+    final aspect = _aspectHW;
+    if (aspect == null) return null;
+    final fit = ZCommonSizes.bestFit(aspect);
+    if (fit == null) return null;
+    return ZArtworkSize(
+      heightCm: fit.heightCm,
+      widthCm: fit.widthCm,
+      source: ZSizeSource.estimated,
+    );
+  }
+
+  String get _sizeButtonLabel {
+    final s = _shownSize;
+    final l = widget.labels;
+    if (s == null) return l.sizeUnknownLabel;
+    if (s.isExact) return '${s.hwText} cm';
+    return '≈ ${s.hwText} cm${l.sizeCheckSuffix}';
+  }
+
+  Future<void> _openSizeSheet() async {
+    final result = await showZArtworkSizeSheet(
+      context,
+      theme: _theme,
+      labels: widget.sizeLabels,
+      estimatedAspectHW: _aspectHW,
+      initial: _shownSize,
+    );
+    if (!mounted || result == null) return;
+    setState(() => _size = result);
   }
 
   Future<void> _detect() async {
@@ -364,7 +456,11 @@ class _FrameCropViewState extends State<FrameCropView> {
     if (_applying || _detecting || _enhancing || _image == null) return;
     final corners = List<Offset>.unmodifiable(_corners);
     final enhanced = _enhanceOn ? _enhancedBytes : null;
+    final aspectHW = widget.sizeTools || _size != null ? _aspectHW : null;
+    final aspectWH = aspectHW == null ? null : 1 / aspectHW;
     FrameCropResult result(Uint8List? out) => FrameCropResult(
+          size: _size,
+          outputAspectWH: out == null ? null : aspectWH,
           outputBytes: out,
           corners: corners,
           quarterTurns: _turns,
@@ -388,7 +484,9 @@ class _FrameCropViewState extends State<FrameCropView> {
       final source = [
         for (final c in corners) ZQuadMath.unrotatePoint(c, _turns),
       ];
-      final warp = widget.warp ?? ZPerspectiveWarp.warpBytes;
+      final warp = widget.warp ??
+          (Uint8List b, List<Offset> c) =>
+              ZPerspectiveWarp.warpBytes(b, c, aspectWH: aspectWH);
       final bytes = await warp(enhanced ?? widget.imageBytes, source);
       if (!mounted) return;
       widget.onContinue(result(bytes));
@@ -451,6 +549,19 @@ class _FrameCropViewState extends State<FrameCropView> {
                 FrameToolRow(
                   theme: _theme,
                   children: [
+                    if (widget.sizeTools)
+                      ZToolButton(
+                        key: const Key('z_frame_size'),
+                        theme: _theme,
+                        icon: _size != null
+                            ? ZLineIconKind.sizeConfirmed
+                            : ZLineIconKind.sizeEstimated,
+                        label: _sizeButtonLabel,
+                        active: _size != null,
+                        toggled: _size != null,
+                        onTap:
+                            _applying || _image == null ? null : _openSizeSheet,
+                      ),
                     if (enhancer != null &&
                         (_enhancing || _enhancedBytes != null))
                       ZToolButton(
@@ -636,6 +747,19 @@ class _FrameCropViewState extends State<FrameCropView> {
                   onEnd: () => setState(() => _dragCorner = null),
                 ),
               ),
+            if (widget.sizeTools && _theme.showMeasurements)
+              if (_shownSize case final shown?)
+                Positioned.fill(
+                  child: FrameMeasurementLines(
+                    theme: _theme,
+                    outline: _boundsOf(pts),
+                    bounds: Size(constraints.maxWidth, constraints.maxHeight),
+                    heightLabel:
+                        '${shown.isExact ? '' : '≈ '}${formatCm(shown.heightCm)} cm',
+                    widthLabel:
+                        '${shown.isExact ? '' : '≈ '}${formatCm(shown.widthCm)} cm',
+                  ),
+                ),
             if (widget.enableMagnifyingGlass && _dragCorner != null)
               _buildLoupe(image, fitted, pts, _dragCorner!, constraints),
           ],
@@ -1006,6 +1130,17 @@ class FrameLoupePainter extends CustomPainter {
       old.image != image ||
       old.quarterTurns != quarterTurns ||
       !_sameQuad(old.quad, quad);
+}
+
+Rect _boundsOf(List<Offset> pts) {
+  var l = pts.first.dx, t = pts.first.dy, r = l, b = t;
+  for (final p in pts) {
+    l = math.min(l, p.dx);
+    t = math.min(t, p.dy);
+    r = math.max(r, p.dx);
+    b = math.max(b, p.dy);
+  }
+  return Rect.fromLTRB(l, t, r, b);
 }
 
 bool _sameQuad(List<Offset> a, List<Offset> b) {

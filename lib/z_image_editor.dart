@@ -7,6 +7,9 @@ export 'src/z_image_editor_widget.dart' show ZImageEditor;
 export 'src/frame/frame_detector.dart';
 export 'src/theme/z_image_editor_theme.dart';
 export 'src/frame/quad_math.dart';
+export 'src/frame/rect_aspect.dart';
+export 'src/frame/artwork_size.dart';
+export 'src/frame/size_sheet.dart';
 export 'src/frame/perspective_warp.dart';
 
 // Models (for advanced usage)

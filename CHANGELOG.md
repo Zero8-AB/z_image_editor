@@ -4,6 +4,9 @@
 
 ### Features
 
+* frame step restyled per the approved design: dashed alternative outlines, ringed handles, 44 px chip tap areas, new line icons
+* artwork size tools (`enableSizeTools`, `artworkSize`, `onArtworkSizeConfirmed`): Size tool, red measurement lines (≈ estimated / exact), "Real size of the artwork" sheet with common sizes, auto-fill of the other side and depth picks
+* straightened images keep the real shape (`ZRectAspect`: perspective aspect ratio with the EXIF focal length; `warpOutputSize(aspectWH:)`)
 * optional perspective "frame" step (`frameDetector`, `startWithFrameCrop`, `ZFrameCandidate`, `ZQuadMath`, `ZPerspectiveWarp`): choose a four-corner outline from up to three detector suggestions or drag the corners (with magnifier), rotate, then continue editing the straightened image
 * optional enhancer toggle in the frame step (`imageEnhancer`, `ZImageEnhancer`), on by default
 * `ZImageEditorTheme` for the editor chrome and the frame step; the default keeps the current look

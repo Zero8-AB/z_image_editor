@@ -55,6 +55,24 @@ class ZImageEditorTheme {
   /// instead of the floating pill.
   final bool toolRowTabs;
 
+  // ── Light sheets (size) ───────────────────────────────────────────────
+  final Color sheetColor;
+  final Color sheetTextColor;
+  final Color sheetMutedColor;
+  final Color sheetBorderColor;
+  final Color sheetFieldColor;
+  final Color sheetSelectedFillColor;
+  final Color sheetAccentColor;
+  final Color sheetInfoFillColor;
+  final Color sheetEstimatedFillColor;
+  final Color sheetEstimatedBorderColor;
+  final Color sheetBestFitColor;
+
+  // ── Measurement lines ─────────────────────────────────────────────────
+  /// Show size lines next to the outline (needs a size or an estimate).
+  final bool showMeasurements;
+  final Color measurementColor;
+
   // ── Header buttons ───────────────────────────────────────────────────────
   final Color primaryButtonColor;
   final Color primaryButtonPressedColor;
@@ -126,6 +144,19 @@ class ZImageEditorTheme {
     this.titleFontFamily,
     this.titleFontSize = 17,
     this.showTitle = false,
+    this.sheetColor = const Color(0xFFFDFDFB),
+    this.sheetTextColor = const Color(0xFF282525),
+    this.sheetMutedColor = const Color(0xFF646464),
+    this.sheetBorderColor = const Color(0xFFE6DCDC),
+    this.sheetFieldColor = const Color(0xFFFFFFFF),
+    this.sheetSelectedFillColor = const Color(0xFFFCD6D7),
+    this.sheetAccentColor = const Color(0xFFCE5151),
+    this.sheetInfoFillColor = const Color(0xFFF5F0F0),
+    this.sheetEstimatedFillColor = const Color(0xFFF8F9FA),
+    this.sheetEstimatedBorderColor = const Color(0xFFA0A0A0),
+    this.sheetBestFitColor = const Color(0xFF8A1B1B),
+    this.showMeasurements = false,
+    this.measurementColor = const Color(0xFFCE5151),
     this.tabSelectedColor = const Color(0xFF007AFF),
     this.toolRowTabs = false,
     this.primaryButtonColor = const Color(0xFFFFCC00),
