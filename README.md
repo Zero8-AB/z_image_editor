@@ -396,7 +396,9 @@ step. At most one banner is shown (in this order): a strong reflection on
 the glass, part of the frame outside the photo, too dark, blurry. "Retake"
 appears when `onRetake` is set (the app closes the editor and opens the
 camera again); "Use anyway" and the cross close the banner. Nothing is ever
-blocked. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
+blocked. With `onRetake` set, the frame step's tool row also always shows a
+Retake tool (camera icon, `ZFrameCropLabels.retake`), so a good photo can be
+retaken too. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
 `ZPhotoChecker` for your own checks.
 
 ### Safe areas

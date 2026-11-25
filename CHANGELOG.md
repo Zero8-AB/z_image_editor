@@ -4,6 +4,7 @@
 
 ### Features
 
+* Retake tool in the frame step's tool row (`ZFrameCropLabels.retake`, `ZLineIconKind.camera`): always shown when `onRetake` is set, not only in a photo hint
 * frame evidence (`onFrameEvidence`, `ZFrameEvidence`, `ZFrameLevel`, `ZFrameCandidate.level` / `matAround`, `FrameCropResult.evidence`): frame, mat, glass reflections and shape seen in the frame step, for medium suggestions
 * size sheet restyle: labels Height / Width / Depth under "Dimensions, including frame (cm)", no × separators, 48 px fields and buttons, colours from `ZImageEditorTheme.size*` (neutral defaults)
 * `FrameMeasurementLines` is exported (the app draws measured sizes on its live camera)

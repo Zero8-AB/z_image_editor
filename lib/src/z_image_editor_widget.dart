@@ -155,8 +155,9 @@ class ZImageEditor extends StatefulWidget {
   /// Texts of the photo hints.
   final ZPhotoHintLabels photoHintLabels;
 
-  /// "Retake" in a photo hint: the app closes the editor and takes a new
-  /// photo. Null hides Retake (Use anyway and the cross remain).
+  /// "Retake" in a photo hint and in the frame step's tool row: the app
+  /// closes the editor and takes a new photo. Null hides both (Use anyway
+  /// and the cross remain in a hint).
   final VoidCallback? onRetake;
 
   /// Offer "Auto" (black/white stretch, white balance from the white mat,

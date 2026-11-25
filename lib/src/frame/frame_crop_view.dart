@@ -137,7 +137,8 @@ const int _manualShapeKey = -1;
 
 /// The "choose the painting's rectangle" step: the photo with a draggable
 /// four-corner outline, up to [kMaxFrameCandidates] detector outlines as
-/// chips, and a tool row (enhancer toggle, Rotate, Full photo, Reset).
+/// chips, and a tool row (enhancer toggle, Rotate, Full photo, Reset, and
+/// Retake when [onRetake] is set).
 class FrameCropView extends StatefulWidget {
   final Uint8List imageBytes;
   final ZFrameDetector? detector;
@@ -162,7 +163,7 @@ class FrameCropView extends StatefulWidget {
   final ZPhotoChecker? photoChecker;
   final ZPhotoHintLabels hintLabels;
 
-  /// "Retake" in the hint; null hides it.
+  /// "Retake" in the hint and in the tool row; null hides both.
   final VoidCallback? onRetake;
 
   final VoidCallback onCancel;
@@ -851,6 +852,14 @@ class _FrameCropViewState extends State<FrameCropView> {
                       label: widget.resetLabel,
                       onTap: _applying || !_canReset ? null : _reset,
                     ),
+                    if (widget.onRetake != null)
+                      ZToolButton(
+                        key: const Key('z_frame_retake'),
+                        theme: _theme,
+                        icon: ZLineIconKind.camera,
+                        label: labels.retake,
+                        onTap: _applying ? null : widget.onRetake,
+                      ),
                   ],
                 ),
               ],
