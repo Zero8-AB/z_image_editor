@@ -252,6 +252,11 @@ class ZFrameCropLabels {
   final String shapeRound;
   final String shapeOval;
 
+  /// Dialog shown when Next can't produce the cropped image.
+  final String processErrorTitle;
+  final String processErrorMessage;
+  final String processErrorOk;
+
   const ZFrameCropLabels({
     this.title = 'Choose the frame',
     this.editorTitle = 'Edit photo',
@@ -272,5 +277,8 @@ class ZFrameCropLabels {
     this.shapeRectangle = 'Rectangle',
     this.shapeRound = 'Round',
     this.shapeOval = 'Oval',
+    this.processErrorTitle = 'Error',
+    this.processErrorMessage = 'Failed to process image',
+    this.processErrorOk = 'OK',
   });
 }

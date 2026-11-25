@@ -30,6 +30,7 @@ screens: see `TESTS.md` in the Monogram app.
 | 2 | Tool buttons ≥ 44 px | `frame_step_design_test` › tool buttons are at least 44 px tall |
 | 2 | Next / Cancel | `frame_step_design_test` › Next and Cancel; `frame_crop_view_test` › Continue warps…, Cancel calls onCancel, Next is disabled and busy while the detector runs |
 | 2 | Next waits for the enhanced image (decoded, also when reopened) | `frame_crop_view_test` › Next stays disabled until the enhanced image is decoded; reopened: Next waits for the cached enhanced image |
+| 2 | Next with a photo the `image` package can't read (HEIC): engine decode, EXIF orientation and size cap as the Dart path; error dialog text from `ZFrameCropLabels` | `frame/engine_decode_fallback_test.dart` (all); `editor/image_processing_test` › decodes via the engine when the image package cannot (HEIC) |
 | 3 | Size tool label (≈ … · Check / exact) | `frame/frame_size_tools_test.dart` › estimated: "≈ … · Check" and ≈ lines, known size: no ≈…, no matching size: "Size · Check" |
 | 3, 5 | Details size used only when its H : W is within 12 % of the outline's estimate; another shape or swapped H/W falls back to "≈ … · Check" | `frame_size_tools_test` › known size: no ≈… (A3 vs 4 : 3); known size of another shape (60 × 30) / height and width swapped (30 × 40): estimate, "≈ … · Check" |
 | 3 | Measurement lines (≈ vs confirmed), inside the screen | `frame_size_tools_test` › estimated…, Size opens the sheet; Confirm locks the size, lines stay inside the screen for a full-width outline |

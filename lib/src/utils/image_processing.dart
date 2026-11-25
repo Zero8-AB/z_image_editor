@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:z_image_editor/src/frame/perspective_warp.dart';
 import 'package:z_image_editor/src/models/image_editor_state.dart';
 import 'package:z_image_editor/src/models/image_output_format.dart';
 import 'package:z_image_editor/src/utils/transformation_service.dart';
@@ -304,14 +305,38 @@ class ImageProcessing {
     );
   }
 
+  /// Decodes [bytes] for the pixel-based fallbacks: the `image` package
+  /// where it can, else the engine codec (HEIC/HEIF, AVIF, …).
+  static Future<img.Image> _decodeCpu(Uint8List bytes) async {
+    final dartFirst = ZPerspectiveWarp.decodesInDart(bytes);
+    if (dartFirst) {
+      final decoded = img.decodeImage(bytes);
+      if (decoded != null) return decoded;
+    }
+    try {
+      final px = await ZPerspectiveWarp.decodeWithEngine(bytes);
+      return img.Image.fromBytes(
+        width: px.width,
+        height: px.height,
+        bytes: px.rgba.buffer,
+        bytesOffset: px.rgba.offsetInBytes,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      );
+    } catch (_) {
+      final decoded = dartFirst ? null : img.decodeImage(bytes);
+      if (decoded != null) return decoded;
+      throw Exception('Failed to decode image');
+    }
+  }
+
   /// Pixel-based fallback for [processImageToBytes] (no displaySize).
   static Future<Uint8List> _processImageFallbackToBytes({
     required Uint8List bytes,
     required ImageEditorState state,
     ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
-    img.Image? image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode image');
+    var image = await _decodeCpu(bytes);
 
     final totalRotation = state.totalRotation;
     if (totalRotation != 0) {
@@ -348,8 +373,7 @@ class ImageProcessing {
     required ImageEditorState state,
     ImageOutputFormat outputFormat = ImageOutputFormat.png,
   }) async {
-    img.Image? image = img.decodeImage(bytes);
-    if (image == null) throw Exception('Failed to decode image');
+    var image = await _decodeCpu(bytes);
 
     // Rotation first, then crop (correct order).
     final totalRotation = state.totalRotation;

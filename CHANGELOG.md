@@ -22,6 +22,7 @@
 
 ### Bug Fixes
 
+* frame step: Next no longer fails with "Failed to process image" for HEIC/HEIF (or other) photos the `image` package can't decode; they are decoded by the engine codec (same orientation as shown) and warped from RGBA (`ZPerspectiveWarp.decodeWithEngine`, `warpRgbaSync`); the pixel fallback export does the same. The error dialog's text is in `ZFrameCropLabels` (`processErrorTitle`, `processErrorMessage`, `processErrorOk`)
 * measurement lines no longer overflow when the outline is shorter than its label (the label is shown alone, scaled down)
 * unmodified images are returned as a byte-identical copy in a new temp file with the correct extension (from the magic bytes), never as the caller's own `File` and never as `.tmp`
 * undo/redo map the crop rect to the current canvas size

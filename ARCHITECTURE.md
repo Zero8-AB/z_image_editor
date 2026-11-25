@@ -442,6 +442,7 @@ ZImageEditor (_inFrameStep)
          ├── detector.detect(bytes)  → ≤ 3 candidates (invalid quads dropped)
          ├── enhancer.apply(bytes)   → fixed bytes | null (toggle hidden)
          └── Next → ZPerspectiveWarp.warpBytes(active bytes, corners)
+                     (image package; HEIC etc.: engine decode → RGBA warp)
                      → FrameCropResult(outputBytes, corners, turns, …)
 ZImageEditor._onFrameContinue
    └── _frameOutputs[index] = outputBytes → controller.initialize(imageBytes: …)

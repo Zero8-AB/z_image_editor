@@ -228,6 +228,19 @@ void main() {
       expect(d.width, 20);
       expect(d.height, 30);
     });
+
+    test('decodes via the engine when the image package cannot (HEIC)',
+        () async {
+      final original = ZPerspectiveWarp.decodesInDart;
+      ZPerspectiveWarp.decodesInDart = (_) => false;
+      addTearDown(() => ZPerspectiveWarp.decodesInDart = original);
+      final bytes = splitPng(30, 20);
+      const state = ImageEditorState(rotation: 90);
+      final out =
+          await ImageProcessing.processImageToBytes(bytes: bytes, state: state);
+      final d = img.decodePng(out)!;
+      expect([d.width, d.height], [20, 30]);
+    });
   });
 
   test('ui codec is available in tests', () async {

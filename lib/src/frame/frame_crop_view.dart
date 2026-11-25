@@ -698,14 +698,15 @@ class _FrameCropViewState extends State<FrameCropView> {
       widget.onContinue(result(bytes));
     } catch (_) {
       if (!mounted) return;
+      final labels = widget.labels;
       await showCupertinoDialog<void>(
         context: context,
         builder: (context) => CupertinoAlertDialog(
-          title: const Text('Error'),
-          content: const Text('Failed to process image'),
+          title: Text(labels.processErrorTitle),
+          content: Text(labels.processErrorMessage),
           actions: [
             CupertinoDialogAction(
-              child: const Text('OK'),
+              child: Text(labels.processErrorOk),
               onPressed: () => Navigator.pop(context),
             ),
           ],

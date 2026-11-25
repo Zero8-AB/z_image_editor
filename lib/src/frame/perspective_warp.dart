@@ -1,11 +1,16 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'dart:ui' show Offset;
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as img;
 
+import '../utils/image_format_sniffer.dart';
 import 'quad_math.dart';
+
+/// Formats the `image` package decodes (by magic bytes).
+const Set<String> _dartFormats = {'jpg', 'png', 'gif', 'webp', 'bmp', 'tiff'};
 
 /// Perspective-rectifies a quad of an encoded image at full resolution.
 ///
@@ -28,6 +33,10 @@ class ZPerspectiveWarp {
   /// [outsideFill] (0xAARRGGBB, opaque; JPEG unless the source has alpha)
   /// when the result can't keep transparency.
   ///
+  /// Formats the `image` package can't read (HEIC/HEIF, AVIF, …) are
+  /// decoded by the engine codec instead, on the calling isolate (see
+  /// [decodeWithEngine]); the warp itself still runs in the background.
+  ///
   /// Throws a [FormatException] when [bytes] cannot be decoded.
   static Future<Uint8List> warpBytes(
     Uint8List bytes,
@@ -37,16 +46,97 @@ class ZPerspectiveWarp {
     double? aspectWH,
     bool ellipse = false,
     int? outsideFill,
-  }) {
+  }) async {
     final flat = <double>[
       for (final c in corners) ...[c.dx, c.dy]
     ];
+    Object? dartError;
+    StackTrace? dartStack;
+    if (decodesInDart(bytes)) {
+      try {
+        return await compute(
+          _warpEntry,
+          _WarpJob(bytes, null, 0, 0, flat, jpegQuality, maxSide, aspectWH,
+              ellipse, outsideFill),
+          debugLabel: 'z_image_editor frame warp',
+        );
+      } catch (e, st) {
+        // A file the `image` package rejects may still be readable by the
+        // engine (it is what showed the photo): try that before failing.
+        dartError = e;
+        dartStack = st;
+      }
+    }
+    final ZRgbaPixels pixels;
+    try {
+      pixels = await decodeWithEngine(
+        bytes,
+        maxSide: maxSide == null ? null : (maxSide * 1.25).round(),
+      );
+    } catch (_) {
+      if (dartError != null) Error.throwWithStackTrace(dartError, dartStack!);
+      throw const FormatException('Could not decode the image');
+    }
     return compute(
       _warpEntry,
-      _WarpJob(
-          bytes, flat, jpegQuality, maxSide, aspectWH, ellipse, outsideFill),
+      _WarpJob(null, pixels.rgba, pixels.width, pixels.height, flat,
+          jpegQuality, maxSide, aspectWH, ellipse, outsideFill),
       debugLabel: 'z_image_editor frame warp',
     );
+  }
+
+  /// Whether [warpBytes] decodes [bytes] with the `image` package (by
+  /// magic bytes: JPEG, PNG, GIF, WebP, BMP, TIFF). Anything else goes to
+  /// the engine codec. Also used by the editor's pixel fallback export.
+  /// Replaceable, e.g. in tests to force the engine path.
+  static bool Function(Uint8List bytes) decodesInDart = _sniffDartFormat;
+
+  static bool _sniffDartFormat(Uint8List bytes) =>
+      _dartFormats.contains(imageExtensionFromBytes(bytes));
+
+  /// Decodes [bytes] with the engine codec (the one that displays the
+  /// photo, so EXIF orientation and coordinates match what the outline was
+  /// drawn on) into straight (non-premultiplied) RGBA, the longer side
+  /// scaled down to at most [maxSide].
+  ///
+  /// Must run on an isolate with the engine (the UI isolate). Throws when
+  /// the engine can't decode [bytes].
+  static Future<ZRgbaPixels> decodeWithEngine(
+    Uint8List bytes, {
+    int? maxSide,
+  }) async {
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    final codec = await ui.instantiateImageCodecWithSize(
+      buffer,
+      getTargetSize: (w, h) {
+        final longest = math.max(w, h);
+        if (maxSide == null || longest <= maxSide) {
+          return ui.TargetImageSize(width: w);
+        }
+        return ui.TargetImageSize(width: math.max(1, w * maxSide ~/ longest));
+      },
+    );
+    try {
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      try {
+        final data = await image.toByteData(
+          format: ui.ImageByteFormat.rawStraightRgba,
+        );
+        if (data == null) {
+          throw const FormatException('Could not read the image pixels');
+        }
+        return ZRgbaPixels(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          image.width,
+          image.height,
+        );
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      codec.dispose();
+    }
   }
 
   /// Synchronous core of [warpBytes]; exposed for tests.
@@ -63,7 +153,70 @@ class ZPerspectiveWarp {
     if (decoded == null) {
       throw const FormatException('Could not decode the image');
     }
-    var src = img.bakeOrientation(decoded);
+    return _warpDecoded(
+      img.bakeOrientation(decoded),
+      corners,
+      jpegQuality: jpegQuality,
+      maxSide: maxSide,
+      aspectWH: aspectWH,
+      ellipse: ellipse,
+      outsideFill: outsideFill,
+    );
+  }
+
+  /// Like [warpBytesSync] for already decoded, upright pixels ([rgba]:
+  /// straight RGBA, [width] × [height], e.g. from [decodeWithEngine]).
+  /// Fully opaque pixels give a JPEG, otherwise a PNG.
+  static Uint8List warpRgbaSync(
+    Uint8List rgba,
+    int width,
+    int height,
+    List<Offset> corners, {
+    int jpegQuality = 95,
+    int? maxSide = defaultMaxOutputSide,
+    double? aspectWH,
+    bool ellipse = false,
+    int? outsideFill,
+  }) {
+    if (width <= 0 || height <= 0 || rgba.length < width * height * 4) {
+      throw const FormatException('Invalid pixel buffer');
+    }
+    var opaque = true;
+    for (var i = 3; i < width * height * 4; i += 4) {
+      if (rgba[i] != 255) {
+        opaque = false;
+        break;
+      }
+    }
+    var src = img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: rgba.buffer,
+      bytesOffset: rgba.offsetInBytes,
+      numChannels: 4,
+      order: img.ChannelOrder.rgba,
+    );
+    if (opaque) src = src.convert(numChannels: 3);
+    return _warpDecoded(
+      src,
+      corners,
+      jpegQuality: jpegQuality,
+      maxSide: maxSide,
+      aspectWH: aspectWH,
+      ellipse: ellipse,
+      outsideFill: outsideFill,
+    );
+  }
+
+  static Uint8List _warpDecoded(
+    img.Image src,
+    List<Offset> corners, {
+    required int jpegQuality,
+    required int? maxSide,
+    required double? aspectWH,
+    required bool ellipse,
+    required int? outsideFill,
+  }) {
     // Very large sources (e.g. 48 MP) are scaled down first so the warp's
     // working copies stay bounded; the output is capped at [maxSide] anyway.
     final longest = src.width > src.height ? src.width : src.height;
@@ -221,8 +374,20 @@ class ZPerspectiveWarp {
   }
 }
 
+/// Decoded straight RGBA pixels (see [ZPerspectiveWarp.decodeWithEngine]).
+class ZRgbaPixels {
+  final Uint8List rgba;
+  final int width;
+  final int height;
+  const ZRgbaPixels(this.rgba, this.width, this.height);
+}
+
+/// Either encoded [bytes] or decoded [rgba] of [width] × [height].
 class _WarpJob {
-  final Uint8List bytes;
+  final Uint8List? bytes;
+  final Uint8List? rgba;
+  final int width;
+  final int height;
   final List<double> corners;
   final int jpegQuality;
   final int? maxSide;
@@ -231,6 +396,9 @@ class _WarpJob {
   final int? outsideFill;
   const _WarpJob(
     this.bytes,
+    this.rgba,
+    this.width,
+    this.height,
     this.corners,
     this.jpegQuality,
     this.maxSide,
@@ -245,8 +413,22 @@ Uint8List _warpEntry(_WarpJob job) {
     for (var i = 0; i < 4; i++)
       Offset(job.corners[i * 2], job.corners[i * 2 + 1]),
   ];
+  final bytes = job.bytes;
+  if (bytes == null) {
+    return ZPerspectiveWarp.warpRgbaSync(
+      job.rgba!,
+      job.width,
+      job.height,
+      corners,
+      jpegQuality: job.jpegQuality,
+      maxSide: job.maxSide,
+      aspectWH: job.aspectWH,
+      ellipse: job.ellipse,
+      outsideFill: job.outsideFill,
+    );
+  }
   return ZPerspectiveWarp.warpBytesSync(
-    job.bytes,
+    bytes,
     corners,
     jpegQuality: job.jpegQuality,
     maxSide: job.maxSide,
