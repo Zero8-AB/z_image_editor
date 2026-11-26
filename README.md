@@ -360,13 +360,40 @@ sheet (height × width × depth, common sizes, depth quick picks).
   size (`artworkSize`, e.g. from the artwork details, or one the user
   confirms), else estimated from the outline's perspective
   (`ZRectAspect`, Zhang–He; focal length from EXIF
-  `FocalLengthIn35mmFilm`, else solved from the outline, else a 26 mm
-  phone lens), else from the average side lengths.
+  `FocalLengthIn35mmFilm`, measured across the photo's diagonal; without
+  EXIF a 26 mm phone lens, unless the outline shows strong perspective
+  both ways and solves to clearly another lens), else from the average
+  side lengths.
 - Estimates show "≈" ("≈ 50 × 40 cm · Check", "≈ 50 cm"): the best-fitting
   common size (40×30, 50×40, 70×50, 100×70, A3, A4; landscape versions
-  for wide art) when its shape matches within 5 %. Exact sizes show
-  without "≈" and a lock icon.
-- `onArtworkSizeConfirmed` reports a size the user confirmed (after Next).
+  for wide art) when its shape matches within 5 %; when no common size has
+  the shape (a 16 : 9 screen, a long strip), the outline's own shape at
+  the area of a typical 50 × 40, sides rounded to 5 cm (always height × width: "≈ 35 × 60 cm" for a landscape
+  screen, "≈ 60 × 35 cm" for an upright one;
+  `ZCommonSizes.estimate`). Exact sizes show without "≈" and a lock icon.
+- Nested outlines fit each other: only one outline gets its size from the
+  common sizes (the detector's outermost, e.g. "With frame"); the outlines
+  inside it are measured against it on the straightened plane
+  (`ZRectAspect.sizeOnPlane`), so "Artwork" is never larger than "With
+  frame", whatever the size's source. A size confirmed in the sheet, a
+  measured `artworkSize` (tied to the pre-selected outline) or one from
+  the artwork's details (tied to the outermost outline that has its
+  shape) is exact for its own outline only; the other outlines are scaled
+  from it and stay "≈". The sheet's fields are headed "Dimensions,
+  including frame (cm)" on the outermost outline and "Dimensions, without
+  frame (cm)" (`ZSizeSheetLabels.dimensionsWithoutFrame`) on an outline
+  inside it, so the heading says which outline the confirmed size is for.
+  The full photo is not a level: a size confirmed on it is not a
+  reference for other outlines.
+- `onArtworkSizeConfirmed` reports the size the user confirmed in the
+  sheet (after Next, once per confirmed size), whichever outline is
+  selected on Next; `onArtworkSize` then carries the selected outline's
+  own size. `ZArtworkSize.includesFrame` says what the confirmed size is
+  of: `true` when it was confirmed on the outermost outline (fields headed
+  "including frame"; also on a photo with a single outline), `false` on an
+  outline inside it ("without frame": mat window, artwork). It is kept
+  when Next is pressed on another outline, and is `null` when not known
+  (sizes from the details, measured sizes, "≈" estimates).
 - `onArtworkSize` reports the size the frame step shows on Next, whatever its
   source: exact, or the "≈" estimate (`ZSizeSource.estimated`, no depth).
 - The sheet's fields, common sizes and depth chips take their colours from
@@ -384,7 +411,8 @@ ZImageEditor(
   enableSizeTools: true,
   artworkSize: const ZArtworkSize(
       heightCm: 50, widthCm: 40, depthCm: 2, source: ZSizeSource.details),
-  onArtworkSizeConfirmed: (size) => saveToForm(size),
+  onArtworkSizeConfirmed: (size) =>
+      saveToForm(size, withFrame: size.includesFrame ?? true),
   ...
 )
 ```

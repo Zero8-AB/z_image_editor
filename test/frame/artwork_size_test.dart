@@ -25,6 +25,22 @@ void main() {
     expect(s, const ZArtworkSize(heightCm: 50, widthCm: 40, depthCm: 2));
   });
 
+  test('ZArtworkSize.includesFrame: unknown by default, part of equality', () {
+    const s = ZArtworkSize(heightCm: 50, widthCm: 40, depthCm: 2);
+    expect(s.includesFrame, isNull);
+    final framed = s.copyWith(includesFrame: true);
+    expect(framed.includesFrame, isTrue);
+    expect(framed, isNot(s));
+    expect(framed.hashCode, isNot(s.hashCode));
+    expect(framed.copyWith(includesFrame: false), isNot(framed));
+    // copyWith keeps the flag.
+    expect(framed.copyWith(depthCm: 3).includesFrame, isTrue);
+    expect(framed.toString(), contains('including frame'));
+    expect(framed.copyWith(includesFrame: false).toString(),
+        contains('without frame'));
+    expect(s.toString(), isNot(contains('frame')));
+  });
+
   group('ZCommonSizes', () {
     test('upright art gets upright sizes, wide art wide sizes', () {
       expect(ZCommonSizes.forAspect(1.25).first.label, '40 × 30');
@@ -43,6 +59,43 @@ void main() {
       expect(ZCommonSizes.forAspect(1.02).first.label, '50 × 50');
       expect(ZCommonSizes.forAspect(1.25).any((s) => s.heightCm == s.widthCm),
           isFalse);
+    });
+
+    test('estimate: the common size when one has the shape', () {
+      final s = ZCommonSizes.estimate(1.4);
+      expect((s.heightCm, s.widthCm), (70, 50));
+      expect(s.source, ZSizeSource.estimated);
+      expect(s.isExact, isFalse);
+      expect(ZCommonSizes.estimate(1.0).hwText, '50 × 50');
+    });
+
+    test(
+        'estimate: no common size has the shape: the shape itself, as large '
+        'as the typical size, in 5 cm steps', () {
+      // A TV, 16 : 9 landscape and turned.
+      for (final aspect in [9 / 16, 16 / 9]) {
+        expect(ZCommonSizes.bestFit(aspect), isNull);
+        final s = ZCommonSizes.estimate(aspect);
+        expect(s.source, ZSizeSource.estimated);
+        expect(s.aspectHW / aspect, closeTo(1, 0.06));
+        expect(s.heightCm * s.widthCm, closeTo(50 * 40, 200));
+        expect(s.heightCm % 5, 0);
+        expect(s.widthCm % 5, 0);
+      }
+      expect(ZCommonSizes.estimate(9 / 16).hwText, '35 × 60');
+      expect(ZCommonSizes.estimate(16 / 9).hwText, '60 × 35');
+      // Extreme strips keep positive sides.
+      expect(ZCommonSizes.estimate(1 / 400).heightCm, 5);
+      expect(ZCommonSizes.estimate(400).widthCm, 5);
+    });
+
+    test('estimate: the size keeps the photo’s shape, whatever it is', () {
+      for (var a = 0.2; a < 5; a *= 1.03) {
+        final s = ZCommonSizes.estimate(a);
+        // Within a common size's tolerance, or the 5 cm rounding.
+        expect(ZCommonSizes.shapeDiff(s.aspectHW, a), lessThan(0.2),
+            reason: 'aspect $a -> ${s.hwText}');
+      }
     });
 
     test('ratio text', () {

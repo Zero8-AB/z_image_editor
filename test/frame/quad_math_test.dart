@@ -459,4 +459,38 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  group('nesting', () {
+    const outer = [
+      Offset(0.1, 0.1),
+      Offset(0.9, 0.12),
+      Offset(0.88, 0.9),
+      Offset(0.12, 0.88),
+    ];
+    const inner = [
+      Offset(0.2, 0.2),
+      Offset(0.8, 0.2),
+      Offset(0.8, 0.8),
+      Offset(0.2, 0.8),
+    ];
+
+    test('isInside', () {
+      expect(ZQuadMath.isInside(inner, outer), isTrue);
+      expect(ZQuadMath.isInside(outer, inner), isFalse);
+      expect(ZQuadMath.isInside(outer, outer), isTrue);
+      final poking = [const Offset(0.095, 0.2), ...inner.skip(1)];
+      expect(ZQuadMath.isInside(poking, outer), isFalse);
+      expect(ZQuadMath.isInside(poking, outer, tolerance: 0.01), isTrue);
+      expect(ZQuadMath.isInside(inner, ZQuadMath.fullImage), isTrue);
+    });
+
+    test('isSame', () {
+      expect(ZQuadMath.isSame(inner, List.of(inner)), isTrue);
+      expect(ZQuadMath.isSame(inner, outer), isFalse);
+      expect(
+          ZQuadMath.isSame(
+              inner, [inner[0] + const Offset(0.001, 0), ...inner.skip(1)]),
+          isFalse);
+    });
+  });
 }

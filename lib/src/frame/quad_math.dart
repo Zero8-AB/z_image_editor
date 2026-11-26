@@ -84,6 +84,39 @@ class ZQuadMath {
     return !clockwiseOnly || sign > 0;
   }
 
+  /// Whether every corner of [inner] lies inside the convex quad [outer]
+  /// (TL, TR, BR, BL), or at most [tolerance] outside it.
+  static bool isInside(
+    List<Offset> inner,
+    List<Offset> outer, {
+    double tolerance = 0,
+  }) {
+    for (final p in inner) {
+      for (var i = 0; i < 4; i++) {
+        final a = outer[i], e = outer[(i + 1) % 4] - a;
+        final len = e.distance;
+        if (len == 0) return false;
+        // On screen (y down) the inside of a clockwise quad is to the
+        // right of each side.
+        if ((e.dx * (p.dy - a.dy) - e.dy * (p.dx - a.dx)) / len < -tolerance) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /// Whether [a] and [b] are the same quad (corner by corner, within
+  /// [tolerance]).
+  static bool isSame(List<Offset> a, List<Offset> b,
+      {double tolerance = 1e-6}) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if ((a[i] - b[i]).distance > tolerance) return false;
+    }
+    return true;
+  }
+
   /// Converts normalized corners to pixel coordinates of an image of [size].
   static List<Offset> denormalize(List<Offset> q, Size size) =>
       [for (final p in q) Offset(p.dx * size.width, p.dy * size.height)];

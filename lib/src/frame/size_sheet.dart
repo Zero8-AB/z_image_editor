@@ -15,6 +15,10 @@ class ZSizeSheetLabels {
   final String noMatchHint;
   final String commonSizes;
   final String dimensions;
+
+  /// Heading of the fields when the size is for an outline inside the
+  /// frame (the mat window, the artwork).
+  final String dimensionsWithoutFrame;
   final String height;
   final String width;
   final String depth;
@@ -38,6 +42,7 @@ class ZSizeSheetLabels {
         'No common size has this shape. Enter one side, and we fill in the other.',
     this.commonSizes = 'Common sizes, height × width (cm)',
     this.dimensions = 'Dimensions, including frame (cm)',
+    this.dimensionsWithoutFrame = 'Dimensions, without frame (cm)',
     this.height = 'Height',
     this.width = 'Width',
     this.depth = 'Depth',
@@ -64,6 +69,7 @@ Future<ZArtworkSize?> showZArtworkSizeSheet(
   ZSizeSheetLabels labels = const ZSizeSheetLabels(),
   double? estimatedAspectHW,
   ZArtworkSize? initial,
+  bool includesFrame = true,
 }) {
   return showModalBottomSheet<ZArtworkSize>(
     context: context,
@@ -76,6 +82,7 @@ Future<ZArtworkSize?> showZArtworkSizeSheet(
       labels: labels,
       estimatedAspectHW: estimatedAspectHW,
       initial: initial,
+      includesFrame: includesFrame,
       onConfirm: (s) => Navigator.of(context).pop(s),
       onKeepEstimate: () => Navigator.of(context).pop(),
     ),
@@ -91,6 +98,11 @@ class ZArtworkSizeSheet extends StatefulWidget {
   /// Height / width of the photographed outline (null = unknown).
   final double? estimatedAspectHW;
   final ZArtworkSize? initial;
+
+  /// Whether the size is for the outermost outline (the fields are headed
+  /// "including frame") or for one inside the frame ("without frame").
+  /// The confirmed size carries it as [ZArtworkSize.includesFrame].
+  final bool includesFrame;
   final ValueChanged<ZArtworkSize> onConfirm;
   final VoidCallback onKeepEstimate;
 
@@ -100,6 +112,7 @@ class ZArtworkSizeSheet extends StatefulWidget {
     this.labels = const ZSizeSheetLabels(),
     this.estimatedAspectHW,
     this.initial,
+    this.includesFrame = true,
     required this.onConfirm,
     required this.onKeepEstimate,
   });
@@ -142,6 +155,15 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
     if (init != null && init.isExact) {
       _h.text = formatCm(init.heightCm);
       _w.text = formatCm(init.widthCm);
+    } else if (init != null &&
+        (init.heightCm != _bestFit?.heightCm ||
+            init.widthCm != _bestFit?.widthCm)) {
+      // An estimate that is not this shape's common size (measured against
+      // another outline, or no common size has the shape): shown as the
+      // estimate it is, so typing one side still fills in the other.
+      _h.text = '≈ ${formatCm(init.heightCm)}';
+      _w.text = '≈ ${formatCm(init.widthCm)}';
+      _estimated.addAll([_Field.height, _Field.width]);
     } else if (_bestFit != null) {
       _preset = _bestFit;
       _h.text = formatCm(_bestFit!.heightCm);
@@ -262,6 +284,7 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       widthCm: _width!,
       depthCm: _depth,
       source: ZSizeSource.confirmed,
+      includesFrame: widget.includesFrame,
     ));
   }
 
@@ -378,7 +401,8 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       key: _fieldsKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _heading(l.dimensions, key: const Key('z_size_dimensions')),
+        _heading(widget.includesFrame ? l.dimensions : l.dimensionsWithoutFrame,
+            key: const Key('z_size_dimensions')),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -393,11 +417,13 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       ],
     );
 
-    final autoFilled = _estimated.contains(_Field.width)
-        ? '${l.width.split(' ').first} ${l.autoFilledHint}'
-        : _estimated.contains(_Field.height)
-            ? '${l.height.split(' ').first} ${l.autoFilledHint}'
-            : '';
+    final estimatedWidth = _estimated.contains(_Field.width);
+    final estimatedHeight = _estimated.contains(_Field.height);
+    final autoFilled = estimatedWidth == estimatedHeight
+        ? '' // neither, or both (the step's estimate, nothing typed yet)
+        : estimatedWidth
+            ? '${l.width.split(' ').first} ${l.autoFilledHint}'
+            : '${l.height.split(' ').first} ${l.autoFilledHint}';
     final depth = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
