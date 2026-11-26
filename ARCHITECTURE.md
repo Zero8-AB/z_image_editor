@@ -521,9 +521,17 @@ the area of `ZCommonSizes.typical` (50 × 40) with sides rounded to 5 cm.
 
 `ZRectAspect` implements Zhang & He (2007): with corners m1..m4 (TL, TR,
 BL, BR) and the principal point at the image centre it computes
-k2, k3, n2 = k2·m2 − m1, n3 = k3·m3 − m1, solves the focal length from
-n2/n3 when no EXIF focal length is given (rejecting implausible values),
-and returns √(‖A⁻¹n2‖² / ‖A⁻¹n3‖²). On Next the warp receives
+k2, k3, n2 = k2·m2 − m1, n3 = k3·m3 − m1 and returns
+√(‖A⁻¹n2‖² / ‖A⁻¹n3‖²). The focal length in A is the EXIF
+`FocalLengthIn35mmFilm` × image diagonal / 43.27 mm (`focalPxFor`; the
+35 mm equivalent is defined across the diagonal, so 36 mm across the long
+side was 3.9 % short for a 4 : 3 photo). Without EXIF it is 26 mm
+(`fallbackFocal35mm`). It is solved from n2/n3 only when both vanishing
+points lie within `maxVanishingDistance` (8) image diagonals of the
+centre and the solution is outside 18–38 mm (another lens): on real
+photos without EXIF the solved value for a 26 mm lens ranged from 7 to
+115 mm when one vanishing point was far away, and the ratio was up to
+54 % off; the assumed 26 mm stayed within 1 %. On Next the warp receives
 `aspectWH = 1 / aspect` and `ZQuadMath.warpOutputSize` keeps the longer
 measured side and derives the other from it.
 

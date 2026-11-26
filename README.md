@@ -360,8 +360,10 @@ sheet (height × width × depth, common sizes, depth quick picks).
   size (`artworkSize`, e.g. from the artwork details, or one the user
   confirms), else estimated from the outline's perspective
   (`ZRectAspect`, Zhang–He; focal length from EXIF
-  `FocalLengthIn35mmFilm`, else solved from the outline, else a 26 mm
-  phone lens), else from the average side lengths.
+  `FocalLengthIn35mmFilm`, measured across the photo's diagonal; without
+  EXIF a 26 mm phone lens, unless the outline shows strong perspective
+  both ways and solves to clearly another lens), else from the average
+  side lengths.
 - Estimates show "≈" ("≈ 50 × 40 cm · Check", "≈ 50 cm"): the best-fitting
   common size (40×30, 50×40, 70×50, 100×70, A3, A4; landscape versions
   for wide art) when its shape matches within 5 %; when no common size has

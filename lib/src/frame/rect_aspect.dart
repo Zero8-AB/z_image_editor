@@ -11,18 +11,48 @@ import 'quad_math.dart';
 /// enhancement", 2007): the quad is the image of a rectangle under a
 /// pinhole camera with square pixels and the principal point at the image
 /// centre. With the focal length known (EXIF), the ratio is exact; without
-/// it the focal length is solved from the quad itself (needs real
-/// perspective), else a typical phone lens is assumed.
+/// it a typical phone lens is assumed, unless the quad shows strong
+/// perspective both ways and the focal length solved from it is clearly
+/// another lens's.
 class ZRectAspect {
   ZRectAspect._();
 
   /// Typical phone main camera, 35 mm-equivalent focal length.
   static const double fallbackFocal35mm = 26;
 
+  /// Diagonal of the 35 mm film frame (36 × 24 mm), in mm: a
+  /// "35 mm-equivalent" focal length gives the same angle of view across
+  /// the diagonal, whatever the photo's own shape (4 : 3, 16 : 9).
+  static const double film35Diagonal = 43.266615305567875;
+
+  /// Focal length in pixels of an image of [imageSize] for a
+  /// 35 mm-equivalent focal length of [focal35mm].
+  static double focalPxFor(double focal35mm, Size imageSize) =>
+      focal35mm *
+      math.sqrt(imageSize.width * imageSize.width +
+          imageSize.height * imageSize.height) /
+      film35Diagonal;
+
+  /// The focal length is only solved from a quad whose two vanishing
+  /// points both lie within this many image diagonals of the image
+  /// centre. With one of them further away (a photo taken from the side
+  /// at the artwork's height, or nearly from the front) the solution is
+  /// the product of a huge and a tiny number: a pixel of corner error
+  /// moves it from 7 to 115 mm on real photos, and the ratio with it.
+  static const double maxVanishingDistance = 8;
+
+  /// A solved focal length in this range (35 mm-equivalent) says "a phone's
+  /// main camera" and no more: on real photos the solved value is a few
+  /// mm off either way, and [fallbackFocal35mm] gave the better ratio
+  /// every time. Outside the range the photo was taken with another lens
+  /// (ultra-wide, tele) and the solved value is used.
+  static const double phoneLensFrom = 18;
+  static const double phoneLensTo = 38;
+
   /// Width / height of the rectangle whose image is [quad] (TL, TR, BR, BL
   /// in pixels of an image of [imageSize]). [focalPx] is the focal length in
   /// the same pixels; null = solve it, then fall back to
-  /// [fallbackFocal35mm].
+  /// [fallbackFocal35mm] (see [maxVanishingDistance]).
   ///
   /// Returns null for degenerate quads.
   static double? widthOverHeight(
@@ -49,7 +79,15 @@ class ZRectAspect {
     // Nearly fronto-parallel: the focal length doesn't matter.
     final perspective = n2[2].abs() > 1e-6 && n3[2].abs() > 1e-6;
     double? f = focalPx;
-    if (f == null && perspective) {
+    final diagonal = math.sqrt(imageSize.width * imageSize.width +
+        imageSize.height * imageSize.height);
+    bool near(List<double> n) {
+      final x = n[0] - u0 * n[2], y = n[1] - v0 * n[2];
+      return math.sqrt(x * x + y * y) <=
+          maxVanishingDistance * diagonal * n[2].abs();
+    }
+
+    if (f == null && perspective && near(n2) && near(n3)) {
       final f2 = -((n2[0] * n3[0] -
                   (n2[0] * n3[2] + n2[2] * n3[0]) * u0 +
                   n2[2] * n3[2] * u0 * u0) +
@@ -60,11 +98,12 @@ class ZRectAspect {
       // Accept only a plausible solution (35 mm equivalent 13..120 mm).
       if (f2 > 0) {
         final solved = math.sqrt(f2);
-        final f35 = solved * 36 / math.max(imageSize.width, imageSize.height);
-        if (f35 >= 13 && f35 <= 120) f = solved;
+        final f35 = solved * film35Diagonal / diagonal;
+        final phoneLens = f35 >= phoneLensFrom && f35 <= phoneLensTo;
+        if (f35 >= 13 && f35 <= 120 && !phoneLens) f = solved;
       }
     }
-    f ??= fallbackFocal35mm * math.max(imageSize.width, imageSize.height) / 36;
+    f ??= focalPxFor(fallbackFocal35mm, imageSize);
 
     double normSq(List<double> n) {
       final x = (n[0] - u0 * n[2]) / f!;
@@ -147,7 +186,7 @@ class ZRectAspect {
           exif.imageIfd[0xA405];
       final f35 = v?.toInt();
       if (f35 == null || f35 <= 0) return null;
-      return f35 * math.max(imageSize.width, imageSize.height) / 36;
+      return focalPxFor(f35.toDouble(), imageSize);
     } catch (_) {
       return null;
     }

@@ -37,7 +37,7 @@ screens: see `TESTS.md` in the Monogram app.
 | 3, 5 | Details size used only when its H : W is within 12 % of the outline's estimate; another shape or swapped H/W falls back to "≈ … · Check" | `frame_size_tools_test` › known size: no ≈… (A3 vs 4 : 3); known size of another shape (60 × 30) / height and width swapped (30 × 40): estimate, "≈ … · Check" |
 | 3 | Measurement lines (≈ vs confirmed), inside the screen | `frame_size_tools_test` › estimated…, Size opens the sheet; Confirm locks the size, lines stay inside the screen for a full-width outline |
 | 3 | Lines on a small outline (label only, scaled) | `frame/measurement_lines_test.dart` › a large outline…; an outline shorter than its label: label only, scaled down |
-| 5 | Right shape (perspective + EXIF focal) | `frame/rect_aspect_test.dart` (all); `frame_size_tools_test` › known size: … Next gives it the real shape; `artwork_size_test` › warpOutputSize keeps the real shape when given |
+| 5 | Right shape (perspective + EXIF focal across the diagonal; without EXIF 26 mm, solved only for another lens; real photos of a TV, a felt board and a framed poster from the side within 1.5 %) | `frame/rect_aspect_test.dart` (all); `frame_size_tools_test` › known size: … Next gives it the real shape; `artwork_size_test` › warpOutputSize keeps the real shape when given |
 | 7 | Photo hint banner: copy + icon per issue, only one | `frame/photo_hint_test.dart` › {issue}: exact copy, its icon, one banner; no issue: no banner |
 | 7 | Retake | `photo_hint_test` › Retake calls back and keeps the hint; without onRetake there is no Retake |
 | 7 | Use anyway | `photo_hint_test` › Use anyway closes the hint |
