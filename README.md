@@ -408,11 +408,26 @@ By default the frame step's top-left action is the editor's `cancelLabel` /
 with the camera, pass `onDiscard` instead: the top-left action becomes
 "Cancel" (`ZFrameCropLabels.cancelLabel`) and the app closes the editor and
 drops the photo, e.g. back to its form with nothing added or changed. The
-whole photo stays available with "Full photo" + Next. Cancel is also what a
-reopened frame step shows (the editor's "‹ Frame" leads back to it), it is
-disabled while Next is applying, and once it was tapped the editor delivers
-nothing more (`onSaveAll`, `onArtworkSize`, `onFrameEvidence`, ...), even if
-the app closes it late.
+whole photo stays available with "Full photo" + Next. Cancel is disabled
+while Next is applying.
+
+Cancel means "leave the photo flow with nothing added", wherever the frame
+step is shown:
+
+- **One photo:** the photo and all its edits are dropped.
+- **Several images:** all of them are dropped, including the ones already
+  done (Cancel on image 2 also drops image 1; `onSaveAll` is not called).
+- **Reopened frame step:** the editor's "‹ Frame" (its own Back) leads to
+  the frame step, which still shows Cancel, and Cancel there drops the
+  photo and its edits; it is not "back to the editor". To return to the
+  editor, press Next: with the outline unchanged, the editor's crop and
+  adjustments are kept.
+
+`onDiscard` is called on every Cancel. If the app keeps the editor open
+(for example it asks "Discard photo?" and the user taps Keep), the editor
+keeps working: Next and Save deliver as usual and a later Cancel calls
+`onDiscard` again. Only results that were already on their way when Cancel
+was tapped are dropped.
 
 ```dart
 ZImageEditor(

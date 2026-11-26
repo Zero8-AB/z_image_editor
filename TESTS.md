@@ -111,6 +111,7 @@ screens: see `TESTS.md` in the Monogram app.
 | 1, 2 | Title "Edit photo", ‹ Frame, Save | `frame/editor_themed_test.dart` › Next: "Edit photo", ‹ Frame and Save in the header |
 | 1, 2 | ‹ Frame back and Next again | `editor_themed_test` › ‹ Frame goes back to the frame step and Next returns; `editor_frame_integration_test` › Next warps, continues in the editor, and Frame goes back |
 | 1, 6 | ‹ Frame → change the size → Next re-cuts to the new shape | `frame_size_tools_test` › reopen → change the size → Next uses the new shape |
+| 1, 2 | Cancel with `onDiscard`: the app closes (nothing delivered), or keeps the editor after "Discard photo?" (Cancel calls `onDiscard` again, Next and Save deliver, also for image 2) | `frame/frame_cancel_test.dart` › the app closes the editor on Cancel…; the app asks "Discard photo?" and the user backs out |
 | 1, 2 | Cancel in the first frame step | `editor_themed_test` › Cancel in the frame step cancels the editor; `editor_frame_integration_test` › Cancel in the first frame step cancels the editor |
 | 2 | Crop / Adjust tool-row tabs | `editor_themed_test` › Crop and Adjust tabs switch; Adjust shows its chips; `editor_frame_integration_test` › themed tool-row tabs switch tabs |
 | 2 | Save | `editor_themed_test` › Save hands back one edited image |

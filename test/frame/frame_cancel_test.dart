@@ -43,32 +43,92 @@ Future<Delivered> pumpCameraEditor(
   Size size = const Size(390, 844),
   ZFrameCropLabels labels = const ZFrameCropLabels(),
   String cancelLabel = 'Skip',
+  OnDiscardHost host = OnDiscardHost.count,
+  int images = 1,
 }) async {
   final d = Delivered();
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  final open = ValueNotifier(true);
+  void onDiscard(BuildContext context) {
+    d.discards++;
+    switch (host) {
+      case OnDiscardHost.count:
+        break;
+      case OnDiscardHost.close:
+        open.value = false;
+      case OnDiscardHost.confirmThenKeep:
+        // "Discard photo?" and the user backs out: the editor stays open.
+        showDialog<void>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text('Discard photo?'),
+            actions: [
+              TextButton(
+                key: keepPhotoKey,
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Keep'),
+              ),
+            ],
+          ),
+        );
+    }
+  }
+
   await tester.runAsync(() async {
     await tester.pumpWidget(MaterialApp(
-      home: ZImageEditor(
-        imageBytesList: [testPng(w: 300, h: 400)],
-        frameDetector: detector ?? FakeDetector([rect('With frame', 0.1)]),
-        imageEnhancer: FakeEnhancer(testPng(w: 300, h: 400)),
-        frameCropLabels: labels,
-        theme: designTheme,
-        cancelLabel: cancelLabel,
-        enableSizeTools: true,
-        onRetake: () {},
-        onSaveAll: (files) => d.saved = files,
-        onCancel: () => d.cancels++,
-        onDiscard: withDiscard ? () => d.discards++ : null,
-        onArtworkSize: d.sizes.add,
-        onFrameEvidence: d.evidence.add,
+      home: ValueListenableBuilder<bool>(
+        valueListenable: open,
+        builder: (context, isOpen, _) => !isOpen
+            ? const SizedBox(key: closedKey)
+            : ZImageEditor(
+                imageBytesList: [
+                  for (var i = 0; i < images; i++) testPng(w: 300, h: 400)
+                ],
+                frameDetector:
+                    detector ?? FakeDetector([rect('With frame', 0.1)]),
+                imageEnhancer: FakeEnhancer(testPng(w: 300, h: 400)),
+                frameCropLabels: labels,
+                theme: designTheme,
+                cancelLabel: cancelLabel,
+                enableSizeTools: true,
+                onRetake: () {},
+                onSaveAll: (files) => d.saved = files,
+                onCancel: () => d.cancels++,
+                onDiscard: withDiscard ? () => onDiscard(context) : null,
+                onArtworkSize: d.sizes.add,
+                onFrameEvidence: d.evidence.add,
+              ),
       ),
     ));
   });
   await settleAsync(tester);
   return d;
+}
+
+/// What the app does in onDiscard.
+enum OnDiscardHost {
+  /// Only counts the call.
+  count,
+
+  /// Closes the editor.
+  close,
+
+  /// Asks "Discard photo?"; the user taps Keep (the editor stays open).
+  confirmThenKeep,
+}
+
+const keepPhotoKey = Key('test_keep_photo');
+const closedKey = Key('test_editor_closed');
+
+/// Cancel, then Keep in the app's "Discard photo?" dialog.
+Future<void> cancelThenKeep(WidgetTester tester) async {
+  await tester.tap(find.byKey(cancelKey));
+  await tester.pumpAndSettle();
+  expect(find.text('Discard photo?'), findsOneWidget);
+  await tester.tap(find.byKey(keepPhotoKey));
+  await tester.pumpAndSettle();
 }
 
 String headerLeftLabel(WidgetTester tester) => tester
@@ -111,23 +171,25 @@ void main() {
     expect(d.anyResult, isFalse);
   });
 
-  testWidgets('after Cancel, Next delivers nothing (app slow to close)',
+  testWidgets('the app closes the editor on Cancel: nothing is delivered',
       (tester) async {
-    final d = await pumpCameraEditor(tester);
+    final d = await pumpCameraEditor(tester, host: OnDiscardHost.close);
     await tester.tap(find.byKey(cancelKey));
     await tester.pump();
-    await tester.tap(find.byKey(nextKey), warnIfMissed: false);
+    // The editor is gone: no Next to tap.
+    expect(find.byKey(nextKey), findsNothing);
     await settleAsync(tester, 40);
     expect(d.discards, 1);
     expect(d.anyResult, isFalse);
-    // Still in the frame step: Next did not move on.
-    expect(find.byType(ImageCanvas), findsNothing);
+    expect(find.byKey(closedKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Cancel while detection runs: its late result delivers nothing',
       (tester) async {
     final detector = PendingDetector();
-    final d = await pumpCameraEditor(tester, detector: detector);
+    final d = await pumpCameraEditor(tester,
+        detector: detector, host: OnDiscardHost.close);
     // Detection in flight: Next is disabled, Cancel is not.
     final cancel = tester.widget<ZSecondaryButton>(find.byKey(cancelKey));
     expect(cancel.onPressed, isNotNull);
@@ -136,9 +198,67 @@ void main() {
     expect(d.discards, 1);
     detector.complete();
     await settleAsync(tester);
-    await tester.tap(find.byKey(nextKey), warnIfMissed: false);
+    // The editor is gone: no Next to tap.
+    expect(find.byKey(nextKey), findsNothing);
     await settleAsync(tester, 40);
     expect(d.anyResult, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  group('the app asks "Discard photo?" and the user backs out', () {
+    testWidgets('a second Cancel calls onDiscard again', (tester) async {
+      final d =
+          await pumpCameraEditor(tester, host: OnDiscardHost.confirmThenKeep);
+      await cancelThenKeep(tester);
+      expect(d.discards, 1);
+      await cancelThenKeep(tester);
+      expect(d.discards, 2);
+      expect(d.cancels, 0);
+      expect(d.anyResult, isFalse);
+    });
+
+    testWidgets('Next still works and delivers, and so does Save',
+        (tester) async {
+      final d =
+          await pumpCameraEditor(tester, host: OnDiscardHost.confirmThenKeep);
+      await cancelThenKeep(tester);
+      await tester.tap(find.byKey(nextKey));
+      await settleAsync(tester, 60);
+      expect(find.byType(ImageCanvas), findsOneWidget);
+      expect(d.sizes, hasLength(1));
+      expect(d.evidence, hasLength(1));
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('z_editor_done')));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await settleAsync(tester, 40);
+      expect(d.saved, hasLength(1));
+    });
+
+    testWidgets('with several images, the next image still works',
+        (tester) async {
+      final d = await pumpCameraEditor(tester,
+          images: 2, host: OnDiscardHost.confirmThenKeep);
+      await cancelThenKeep(tester);
+      await tester.tap(find.byKey(nextKey));
+      await settleAsync(tester, 60);
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('z_editor_done')));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await settleAsync(tester, 40);
+      // Image 2's frame step: Cancel, Keep, Next, Save.
+      await cancelThenKeep(tester);
+      expect(d.discards, 2);
+      await tester.tap(find.byKey(nextKey));
+      await settleAsync(tester, 60);
+      await tester.runAsync(() async {
+        await tester.tap(find.byKey(const Key('z_editor_done')));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await settleAsync(tester, 40);
+      expect(d.saved, hasLength(2));
+    });
   });
 
   testWidgets('a reopened frame step also cancels the whole photo',

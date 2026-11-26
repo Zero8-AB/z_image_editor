@@ -162,14 +162,26 @@ class ZImageEditor extends StatefulWidget {
   final VoidCallback? onRetake;
 
   /// "Cancel" at the top left of the frame step
-  /// ([ZFrameCropLabels.cancelLabel]): the app closes the editor and drops
-  /// the photo, e.g. back to its form with nothing added or changed. Shown
-  /// instead of [cancelLabel] / [onCancel] there (also when the frame step
-  /// is reopened from the editor, whose "‹ Frame" leads back to it); the
-  /// whole photo stays available with "Full photo" + Next. Disabled while
-  /// Next is applying. Once tapped, the editor delivers nothing more
-  /// ([onSaveAll], [onArtworkSize], [onFrameEvidence], ...), even if the app
-  /// closes it late. Null (the default) keeps [onCancel] there.
+  /// ([ZFrameCropLabels.cancelLabel]): leave the photo flow with nothing
+  /// added. The app closes the editor and drops what it was given, e.g.
+  /// back to its form with nothing added or changed. Shown instead of
+  /// [cancelLabel] / [onCancel] there; the whole photo stays available with
+  /// "Full photo" + Next. Disabled while Next is applying.
+  ///
+  /// Cancel always means the whole flow, wherever the frame step is shown:
+  /// - one photo: the photo and its edits are dropped;
+  /// - several images: all of them are dropped, also the ones already done
+  ///   (Cancel on image 2 drops image 1 too: [onSaveAll] is never called);
+  /// - a frame step reopened from the editor ("‹ Frame") also drops the
+  ///   photo and its edits. It is not "back to the editor": to return
+  ///   there, press Next (with the outline unchanged the editor's edits are
+  ///   kept).
+  ///
+  /// Called on every Cancel. The app may keep the editor open (e.g. the
+  /// user backs out of a "Discard photo?" dialog): it then keeps working,
+  /// and a later Cancel calls this again. Only results that were already
+  /// on their way when Cancel was tapped are dropped. Null (the default)
+  /// keeps [onCancel] there.
   final VoidCallback? onDiscard;
 
   /// Offer "Auto" (black/white stretch, white balance from the white mat,
@@ -295,13 +307,15 @@ class _ZImageEditorState extends State<ZImageEditor> {
   /// to the editor instead of closing it).
   bool _frameReopened = false;
 
-  /// Set once the frame step's Cancel ([ZImageEditor.onDiscard]) was
-  /// tapped: nothing is delivered after that.
-  bool _discarded = false;
+  /// Bumped on every Cancel ([ZImageEditor.onDiscard]). Work that was
+  /// already running when Cancel was tapped (a save) compares it with the
+  /// value it started with and delivers nothing when it changed. Work
+  /// started after Cancel delivers as usual: the app may have kept the
+  /// editor open (e.g. the user backed out of a "Discard photo?" dialog).
+  int _discardGeneration = 0;
 
   void _discard() {
-    if (_discarded) return;
-    _discarded = true;
+    _discardGeneration++;
     widget.onDiscard?.call();
   }
 
@@ -345,8 +359,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
     _inFrameStep = true;
   }
 
+  /// Next in the frame step. Not guarded by [_discardGeneration]: Cancel
+  /// is disabled while Next applies, so Next never runs across a Cancel.
   void _onFrameContinue(FrameCropResult result) {
-    if (_discarded) return;
     final previous = _frameResults[_currentIndex];
     final size = result.size;
     if (size != null &&
@@ -547,11 +562,12 @@ class _ZImageEditorState extends State<ZImageEditor> {
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
+    final generation = _discardGeneration;
     try {
       if (kIsWeb) {
-        await _handleSaveWeb();
+        await _handleSaveWeb(generation);
       } else {
-        await _handleSaveMobile();
+        await _handleSaveMobile(generation);
       }
     } catch (e) {
       if (mounted) {
@@ -574,7 +590,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
     }
   }
 
-  Future<void> _handleSaveMobile() async {
+  /// [generation]: [_discardGeneration] when the save started; a Cancel
+  /// since then drops the result.
+  Future<void> _handleSaveMobile(int generation) async {
     final state = _controller.state;
     final currentFile = _currentImageFile;
     final currentBytes = _currentImageBytes;
@@ -609,9 +627,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
       return;
     }
 
+    if (generation != _discardGeneration) return;
     if (_isLastImage) {
       _processedImages.add(processedFile);
-      if (_discarded) return;
       widget.onSaveAll!(_processedImages);
     } else {
       await _advanceToNextImage(processedFile);
@@ -637,7 +655,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
     return file;
   }
 
-  Future<void> _handleSaveWeb() async {
+  Future<void> _handleSaveWeb(int generation) async {
     final state = _controller.state;
     final currentBytes = _currentImageBytes;
     if (currentBytes == null) return;
@@ -661,9 +679,9 @@ class _ZImageEditorState extends State<ZImageEditor> {
       );
     }
 
+    if (generation != _discardGeneration) return;
     if (_isLastImage) {
       _processedImageBytes.add(outputBytes);
-      if (_discarded) return;
       widget.onSaveAllBytes!(_processedImageBytes);
     } else {
       _processedImageBytes.add(outputBytes);

@@ -4,7 +4,7 @@
 
 ### Features
 
-* Cancel in the frame step (`onDiscard`, `ZFrameCropLabels.cancelLabel`): with `onDiscard` set the top-left action is "Cancel" instead of the editor's `cancelLabel` (e.g. "Skip"), also in a reopened frame step and on a load error; the app drops the photo. Disabled while Next is applying; nothing is delivered after it (Next, `onSaveAll`, `onArtworkSize`, `onFrameEvidence`). Without `onDiscard` nothing changes
+* Cancel in the frame step (`onDiscard`, `ZFrameCropLabels.cancelLabel`): with `onDiscard` set the top-left action is "Cancel" instead of the editor's `cancelLabel` (e.g. "Skip"), also in a reopened frame step and on a load error; the app drops the photo (with several images: all of them; in a frame step reopened with "‹ Frame": the photo and its edits). Disabled while Next is applying. Called on every Cancel: if the app keeps the editor open (e.g. the user backs out of a "Discard photo?" dialog) the editor keeps working; only results already on their way when Cancel was tapped are dropped. Without `onDiscard` nothing changes
 * frame step header: the title stays centred between Cancel/Skip and Next and scales down instead of running under them (small phones, large text)
 * Retake tool in the frame step's tool row (`ZFrameCropLabels.retakeLabel`, `ZLineIconKind.camera`): always shown when `onRetake` is set, not only in a photo hint
 * shown size on Next (`onArtworkSize`, `FrameCropResult.shownSize`): the size the frame step shows when the user taps Next, exact (details, measured, confirmed) or the "≈" estimate (`ZSizeSource.estimated`, no depth), e.g. to fill a form's empty size fields; called on every Next (also after reopening the frame step and once per image), so treat it as idempotent
