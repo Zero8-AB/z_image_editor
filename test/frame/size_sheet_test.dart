@@ -16,6 +16,7 @@ Future<SheetHarness> pumpSheet(
   ZArtworkSize? initial,
   double keyboard = 0,
   ZImageEditorTheme theme = designTheme,
+  bool includesFrame = true,
 }) async {
   final h = SheetHarness();
   tester.view.physicalSize = size;
@@ -34,6 +35,7 @@ Future<SheetHarness> pumpSheet(
             theme: theme,
             estimatedAspectHW: aspect,
             initial: initial,
+            includesFrame: includesFrame,
             onConfirm: (s) => h.confirmed = s,
             onKeepEstimate: () => h.kept = true,
           ),
@@ -153,8 +155,17 @@ void main() {
             find.byKey(const Key('z_size_field_width')), '45');
         await tester.pump();
         await tester.tap(find.byKey(const Key('z_size_confirm')));
-        expect(h.confirmed,
-            const ZArtworkSize(heightCm: 60, widthCm: 45, depthCm: 2));
+        expect(
+            h.confirmed,
+            const ZArtworkSize(
+                heightCm: 60, widthCm: 45, depthCm: 2, includesFrame: true));
+      });
+
+      testWidgets('a size confirmed "without frame" says so', (tester) async {
+        final h = await pumpSheet(tester, size, includesFrame: false);
+        await tester.tap(find.byKey(const Key('z_size_confirm')));
+        expect(h.confirmed!.hwText, '50 × 40');
+        expect(h.confirmed!.includesFrame, isFalse);
       });
 
       testWidgets('"I don’t know, keep the estimated shape"', (tester) async {
@@ -215,6 +226,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('z_size_confirm')));
     await tester.pumpAndSettle();
-    expect(result, const ZArtworkSize(heightCm: 50, widthCm: 40, depthCm: 2));
+    expect(
+        result,
+        const ZArtworkSize(
+            heightCm: 50, widthCm: 40, depthCm: 2, includesFrame: true));
   });
 }

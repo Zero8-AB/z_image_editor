@@ -249,7 +249,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('z_frame_continue')));
     await settleAsync(tester, 60);
-    expect(reported, const ZArtworkSize(heightCm: 40, widthCm: 30, depthCm: 2));
+    expect(
+        reported,
+        const ZArtworkSize(
+            heightCm: 40, widthCm: 30, depthCm: 2, includesFrame: true));
   });
 
   testWidgets('editor reports the estimated size after Next', (tester) async {
@@ -299,7 +302,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('z_frame_continue')));
     await settleAsync(tester, 60);
-    expect(shown, [const ZArtworkSize(heightCm: 40, widthCm: 30, depthCm: 2)]);
+    expect(shown, [
+      const ZArtworkSize(
+          heightCm: 40, widthCm: 30, depthCm: 2, includesFrame: true)
+    ]);
   });
 
   testWidgets('reopen → Next reports the shown size again', (tester) async {
