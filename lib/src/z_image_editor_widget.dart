@@ -192,10 +192,11 @@ class ZImageEditor extends StatefulWidget {
   /// keeps [onCancel] there.
   final VoidCallback? onDiscard;
 
-  /// Offer "Auto" (black/white stretch, white balance from the white mat,
-  /// mild contrast) first in the Adjust tab of the themed look
-  /// ([ZImageEditorTheme.toolRowTabs]). It turns itself on when the photo
-  /// looks hazy; one tap turns it off. Part of the export.
+  /// Offer "Auto" (a gentle lift of the whites and blacks, white balance
+  /// only from a neutral white mat or paper; see [ZAutoLevels]) first in
+  /// the Adjust tab of the themed look ([ZImageEditorTheme.toolRowTabs]).
+  /// Auto starts off for every photo and is only turned on by the user;
+  /// while it is on, a Before/After line compares. Part of the export.
   final bool enableAutoFix;
 
   /// Texts of the themed Adjust tab and the Before/After compare.
@@ -288,12 +289,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
   // ── Auto fix ─────────────────────────────────────────────────────────────
   /// Auto levels for the current image (null: none / not analysed yet).
   ZAutoLevels? _autoFix;
-  bool _autoForHaze = false;
   int _autoToken = 0;
   ZAdjustPanel _adjustPanel = ZAdjustPanel.brightness;
-
-  /// Images on which the user turned Auto off (it then stays off).
-  final Set<int> _autoOffByUser = {};
   final List<File> _processedImages = [];
   // Web: accumulates PNG bytes across multi-image sessions.
   final List<Uint8List> _processedImageBytes = [];
@@ -433,15 +430,15 @@ class _ZImageEditorState extends State<ZImageEditor> {
     }
   }
 
-  /// Analyses the current image for Auto; turns it on when the photo looks
-  /// hazy (unless the user turned it off on this image) or when [keepOn].
+  /// Analyses the current image for Auto. Auto stays off unless [keepOn]
+  /// (the user had it on before reopening the frame step): it never turns
+  /// itself on.
   Future<void> _analyzeAuto({bool keepOn = false}) async {
     if (!widget.enableAutoFix) return;
     final token = ++_autoToken;
     final index = _currentIndex;
     // Callers rebuild anyway (also called from initState: no setState).
     _autoFix = null;
-    _autoForHaze = false;
     Uint8List? bytes = _currentImageBytes;
     try {
       bytes ??= await _currentImageFile?.readAsBytes();
@@ -451,15 +448,11 @@ class _ZImageEditorState extends State<ZImageEditor> {
     final fix = bytes == null ? null : await ZAutoLevels.fromBytes(bytes);
     if (!mounted || token != _autoToken || index != _currentIndex) return;
     if (fix == null || fix.isNoop) return;
-    final turnOn = keepOn || (fix.hazy && !_autoOffByUser.contains(index));
     setState(() {
       _autoFix = fix;
-      if (turnOn) {
-        _autoForHaze = !keepOn;
-        _adjustPanel = ZAdjustPanel.auto;
-      }
+      if (keepOn) _adjustPanel = ZAdjustPanel.auto;
     });
-    if (turnOn) _controller.setAutoLevels(fix.values, undoable: false);
+    if (keepOn) _controller.setAutoLevels(fix.values, undoable: false);
   }
 
   /// Same output shape (a size changed in the reopened step changes it).
@@ -1615,17 +1608,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
             settings: widget.adjustTabSettings,
             labels: widget.autoFixLabels,
             autoLevels: _autoFix?.values,
-            autoTurnedOnForHaze: _autoForHaze,
             panel: _adjustPanel,
             onPanel: (p) => setState(() => _adjustPanel = p),
-            onAutoChanged: (on) => setState(() {
-              _autoForHaze = false;
-              if (on) {
-                _autoOffByUser.remove(_currentIndex);
-              } else {
-                _autoOffByUser.add(_currentIndex);
-              }
-            }),
           )
         else
           AdjustmentControls(

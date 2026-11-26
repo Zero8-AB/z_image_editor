@@ -498,15 +498,21 @@ an oval keeps its measured shape, and outside the ellipse is transparent
 ### Auto colour fix
 
 With the themed look (`theme.toolRowTabs`), `enableAutoFix: true` puts an
-"Auto" chip first in the Adjust tab. The photo is analysed at 256 px
-(`ZAutoLevels`): per-channel black/white point stretch (0.5 % clipped,
-gain ≤ 2.5), white balance from the brightest near-neutral area (the white
-mat or paper, ±15 %) and a mild contrast boost (×1.06). Auto turns itself
-on when the photo looks hazy (lifted blacks with a short tonal range, or a
-visibly tinted mat) and stays off once the user turns it off. While Auto is
-selected a Before/After line can be dragged across the photo. The fix is a
-colour matrix, so the preview and the export match (WYSIWYG). Texts:
-`autoFixLabels` (`ZAutoFixLabels`).
+"Auto" chip first in the Adjust tab. Auto starts off for every photo and is
+only turned on by the user: a histogram cannot tell a hazy photo from a pale
+drawing on paper, so it never switches itself on. While Auto is on, a
+Before/After line can be dragged across the photo ("Drag to compare.").
+
+The fix is gentle (`ZAutoLevels`, analysed at 256 px): one gain and offset
+for all three channels, from luma, so hues are kept. The white point (99.5th
+percentile) is lifted to at least 235, by at most 1.25× (whites are only ever
+lifted, never darkened); the black point is lowered by 60 % of its lift
+above 20, at most 24 levels (at most 8 when the top is already ≥ 245); no
+extra contrast. White balance only from a real neutral white (mat, paper or
+wall covering ≥ 3 % of the photo, channel spread ≤ 28), at half strength and
+at most 6 % per channel. A photo it would not change gets no Auto chip. The
+fix is a colour matrix, so the preview and the export match (WYSIWYG).
+Texts: `autoFixLabels` (`ZAutoFixLabels`).
 
 ### Tip sheet before the camera
 
