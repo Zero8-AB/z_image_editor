@@ -465,7 +465,12 @@ ZImageEditor._onFrameContinue
 * **Back to frame.** The editor header shows "‹ Frame" instead of Cancel; it
   reopens the step with the previous `FrameCropResult` (no re-detection).
   Cancel in a reopened step returns to the editor unchanged; Next replaces the
-  image and resets the editor's own edits.
+  image and resets the editor's own edits. With `onDiscard`, Cancel in any
+  frame step (also a reopened one) calls `onDiscard` instead: the app drops
+  the whole flow. It is called on every Cancel; a save already running when
+  Cancel is tapped compares `_discardGeneration` with its start value and
+  delivers nothing, while anything started afterwards (the app kept the
+  editor open) delivers as usual.
 * **Output.** "Full photo" without turn/enhancement leaves the original
   image untouched (so `ImageOutputFormat.auto` can still skip re-encoding).
 

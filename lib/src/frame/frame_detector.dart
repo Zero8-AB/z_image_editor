@@ -226,6 +226,11 @@ class ZFrameCropLabels {
   /// the editor has an `onRetake`).
   final String retakeLabel;
 
+  /// Header action (top left) that drops the photo and closes the editor
+  /// (shown instead of the editor's `cancelLabel`, e.g. "Skip", only when
+  /// the editor has an `onDiscard`).
+  final String cancelLabel;
+
   /// Appended to the selected chip once its corners were dragged.
   final String editedSuffix;
 
@@ -269,6 +274,7 @@ class ZFrameCropLabels {
     this.fullPhotoLabel = 'Full photo',
     this.rotateLabel = 'Rotate',
     this.retakeLabel = 'Retake',
+    this.cancelLabel = 'Cancel',
     this.editedSuffix = ' · edited',
     this.detectingLabel = 'Finding the edges…',
     this.manualHint = 'Drag the corners to the edges you want to keep.',

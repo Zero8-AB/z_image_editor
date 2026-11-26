@@ -1118,44 +1118,91 @@ class FrameStepHeader extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, topPadding + 6, 16, 6),
       child: SizedBox(
         height: 44,
-        child: Stack(
-          alignment: Alignment.center,
+        // The title stays centred on the screen, between the two buttons:
+        // it never runs under them and scales down when they leave too
+        // little room (small phones, large text, a long Cancel label).
+        child: CustomMultiChildLayout(
+          delegate: _HeaderLayout(),
           children: [
+            LayoutId(
+              id: _HeaderSlot.cancel,
+              child: ZSecondaryButton(
+                key: const Key('z_frame_cancel'),
+                theme: theme,
+                label: cancelLabel,
+                showBackChevron: cancelIsBack,
+                onPressed: onCancel,
+              ),
+            ),
+            LayoutId(
+              id: _HeaderSlot.next,
+              child: ZPrimaryButton(
+                key: const Key('z_frame_continue'),
+                theme: theme,
+                label: continueLabel,
+                busy: busy,
+                onPressed: onContinue,
+              ),
+            ),
             if (theme.showTitle)
-              Text(
-                title,
-                style: TextStyle(
-                  color: theme.textColor,
-                  fontFamily: theme.titleFontFamily ?? theme.fontFamily,
-                  fontSize: theme.titleFontSize,
-                  letterSpacing: 0.5,
-                  decoration: TextDecoration.none,
+              LayoutId(
+                id: _HeaderSlot.title,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: theme.textColor,
+                      fontFamily: theme.titleFontFamily ?? theme.fontFamily,
+                      fontSize: theme.titleFontSize,
+                      letterSpacing: 0.5,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
                 ),
               ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ZSecondaryButton(
-                  key: const Key('z_frame_cancel'),
-                  theme: theme,
-                  label: cancelLabel,
-                  showBackChevron: cancelIsBack,
-                  onPressed: onCancel,
-                ),
-                ZPrimaryButton(
-                  key: const Key('z_frame_continue'),
-                  theme: theme,
-                  label: continueLabel,
-                  busy: busy,
-                  onPressed: onContinue,
-                ),
-              ],
-            ),
           ],
         ),
       ),
     );
   }
+}
+
+enum _HeaderSlot { cancel, title, next }
+
+/// Cancel left, Next right (each at its natural width, vertically centred),
+/// the title centred in what is left symmetrically between them.
+class _HeaderLayout extends MultiChildLayoutDelegate {
+  static const double gap = 8;
+
+  @override
+  void performLayout(Size size) {
+    // Unbounded width, as in a Row: the buttons take their natural width.
+    final natural = BoxConstraints(maxHeight: size.height);
+    final cancel = layoutChild(_HeaderSlot.cancel, natural);
+    final next = layoutChild(_HeaderSlot.next, natural);
+    positionChild(
+        _HeaderSlot.cancel, Offset(0, (size.height - cancel.height) / 2));
+    positionChild(_HeaderSlot.next,
+        Offset(size.width - next.width, (size.height - next.height) / 2));
+    if (hasChild(_HeaderSlot.title)) {
+      final side = math.max(cancel.width, next.width) + gap;
+      final maxWidth = math.max(0.0, size.width - 2 * side);
+      final title = layoutChild(
+        _HeaderSlot.title,
+        BoxConstraints(maxWidth: maxWidth, maxHeight: size.height),
+      );
+      positionChild(
+        _HeaderSlot.title,
+        Offset(
+            (size.width - title.width) / 2, (size.height - title.height) / 2),
+      );
+    }
+  }
+
+  @override
+  bool shouldRelayout(_HeaderLayout oldDelegate) => false;
 }
 
 /// Row of [ZToolButton]s with a hairline above it.

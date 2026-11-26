@@ -401,6 +401,43 @@ Retake tool (camera icon, `ZFrameCropLabels.retakeLabel`), so a good photo can b
 retaken too. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
 `ZPhotoChecker` for your own checks.
 
+### Cancel (drop the photo)
+
+By default the frame step's top-left action is the editor's `cancelLabel` /
+`onCancel` (e.g. "Skip", keeping the photo as it is). For a photo just taken
+with the camera, pass `onDiscard` instead: the top-left action becomes
+"Cancel" (`ZFrameCropLabels.cancelLabel`) and the app closes the editor and
+drops the photo, e.g. back to its form with nothing added or changed. The
+whole photo stays available with "Full photo" + Next. Cancel is disabled
+while Next is applying.
+
+Cancel means "leave the photo flow with nothing added", wherever the frame
+step is shown:
+
+- **One photo:** the photo and all its edits are dropped.
+- **Several images:** all of them are dropped, including the ones already
+  done (Cancel on image 2 also drops image 1; `onSaveAll` is not called).
+- **Reopened frame step:** the editor's "‹ Frame" (its own Back) leads to
+  the frame step, which still shows Cancel, and Cancel there drops the
+  photo and its edits; it is not "back to the editor". To return to the
+  editor, press Next: with the outline unchanged, the editor's crop and
+  adjustments are kept.
+
+`onDiscard` is called on every Cancel. If the app keeps the editor open
+(for example it asks "Discard photo?" and the user taps Keep), the editor
+keeps working: Next and Save deliver as usual and a later Cancel calls
+`onDiscard` again. Only results that were already on their way when Cancel
+was tapped are dropped.
+
+```dart
+ZImageEditor(
+  onRetake: () { Navigator.of(context).pop(); takeAnotherPhoto(); },
+  onDiscard: () => Navigator.of(context).pop(), // nothing added
+  onCancel: () => Navigator.of(context).pop(),
+  ...
+)
+```
+
 ### Safe areas
 
 Pass `edgeToEdge: true` to draw under transparent system bars (light
