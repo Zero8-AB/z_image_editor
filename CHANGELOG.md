@@ -4,6 +4,8 @@
 
 ### Features
 
+* Cancel in the frame step (`onDiscard`, `ZFrameCropLabels.cancelLabel`): with `onDiscard` set the top-left action is "Cancel" instead of the editor's `cancelLabel` (e.g. "Skip"), also in a reopened frame step and on a load error; the app drops the photo. Disabled while Next is applying; nothing is delivered after it (Next, `onSaveAll`, `onArtworkSize`, `onFrameEvidence`). Without `onDiscard` nothing changes
+* frame step header: the title stays centred between Cancel/Skip and Next and scales down instead of running under them (small phones, large text)
 * Retake tool in the frame step's tool row (`ZFrameCropLabels.retakeLabel`, `ZLineIconKind.camera`): always shown when `onRetake` is set, not only in a photo hint
 * shown size on Next (`onArtworkSize`, `FrameCropResult.shownSize`): the size the frame step shows when the user taps Next, exact (details, measured, confirmed) or the "≈" estimate (`ZSizeSource.estimated`, no depth), e.g. to fill a form's empty size fields; called on every Next (also after reopening the frame step and once per image), so treat it as idempotent
 * frame evidence (`onFrameEvidence`, `ZFrameEvidence`, `ZFrameLevel`, `ZFrameCandidate.level` / `matAround`, `FrameCropResult.evidence`): frame, mat, glass reflections and shape seen in the frame step, for medium suggestions

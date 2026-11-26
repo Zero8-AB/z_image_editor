@@ -161,6 +161,17 @@ class ZImageEditor extends StatefulWidget {
   /// and the cross remain in a hint).
   final VoidCallback? onRetake;
 
+  /// "Cancel" at the top left of the frame step
+  /// ([ZFrameCropLabels.cancelLabel]): the app closes the editor and drops
+  /// the photo, e.g. back to its form with nothing added or changed. Shown
+  /// instead of [cancelLabel] / [onCancel] there (also when the frame step
+  /// is reopened from the editor, whose "‹ Frame" leads back to it); the
+  /// whole photo stays available with "Full photo" + Next. Disabled while
+  /// Next is applying. Once tapped, the editor delivers nothing more
+  /// ([onSaveAll], [onArtworkSize], [onFrameEvidence], ...), even if the app
+  /// closes it late. Null (the default) keeps [onCancel] there.
+  final VoidCallback? onDiscard;
+
   /// Offer "Auto" (black/white stretch, white balance from the white mat,
   /// mild contrast) first in the Adjust tab of the themed look
   /// ([ZImageEditorTheme.toolRowTabs]). It turns itself on when the photo
@@ -222,6 +233,7 @@ class ZImageEditor extends StatefulWidget {
     this.photoChecker,
     this.photoHintLabels = const ZPhotoHintLabels(),
     this.onRetake,
+    this.onDiscard,
     this.enableAutoFix = false,
     this.autoFixLabels = const ZAutoFixLabels(),
     this.roundFrameFill = const Color(0xFFF5F0F0),
@@ -283,6 +295,29 @@ class _ZImageEditorState extends State<ZImageEditor> {
   /// to the editor instead of closing it).
   bool _frameReopened = false;
 
+  /// Set once the frame step's Cancel ([ZImageEditor.onDiscard]) was
+  /// tapped: nothing is delivered after that.
+  bool _discarded = false;
+
+  void _discard() {
+    if (_discarded) return;
+    _discarded = true;
+    widget.onDiscard?.call();
+  }
+
+  /// The frame step's top-left action: Cancel (drop the photo) with
+  /// [ZImageEditor.onDiscard], otherwise back to the editor when reopened,
+  /// else the editor's own cancel (e.g. "Skip").
+  String get _frameCancelLabel => widget.onDiscard != null
+      ? widget.frameCropLabels.cancelLabel
+      : widget.cancelLabel;
+
+  VoidCallback get _frameCancel => widget.onDiscard != null
+      ? _discard
+      : _frameReopened
+          ? () => setState(() => _inFrameStep = false)
+          : widget.onCancel;
+
   /// Original bytes of the current image, loaded for the frame step.
   Future<Uint8List>? _frameSourceBytes;
 
@@ -311,6 +346,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
   }
 
   void _onFrameContinue(FrameCropResult result) {
+    if (_discarded) return;
     final previous = _frameResults[_currentIndex];
     final size = result.size;
     if (size != null &&
@@ -575,6 +611,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
     if (_isLastImage) {
       _processedImages.add(processedFile);
+      if (_discarded) return;
       widget.onSaveAll!(_processedImages);
     } else {
       await _advanceToNextImage(processedFile);
@@ -626,6 +663,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
 
     if (_isLastImage) {
       _processedImageBytes.add(outputBytes);
+      if (_discarded) return;
       widget.onSaveAllBytes!(_processedImageBytes);
     } else {
       _processedImageBytes.add(outputBytes);
@@ -654,10 +692,8 @@ class _ZImageEditorState extends State<ZImageEditor> {
         if (snapshot.hasError) {
           return _FrameLoadError(
             theme: widget.theme,
-            cancelLabel: widget.cancelLabel,
-            onCancel: _frameReopened
-                ? () => setState(() => _inFrameStep = false)
-                : widget.onCancel,
+            cancelLabel: _frameCancelLabel,
+            onCancel: _frameCancel,
           );
         }
         if (bytes == null) {
@@ -674,7 +710,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
           enhancer: widget.imageEnhancer,
           labels: widget.frameCropLabels,
           theme: widget.theme,
-          cancelLabel: widget.cancelLabel,
+          cancelLabel: _frameCancelLabel,
           resetLabel: widget.resetLabel,
           enableMagnifyingGlass: true,
           previous: previous,
@@ -687,9 +723,7 @@ class _ZImageEditorState extends State<ZImageEditor> {
           outsideFill: widget.outputFormat == ImageOutputFormat.jpeg
               ? widget.roundFrameFill
               : null,
-          onCancel: _frameReopened
-              ? () => setState(() => _inFrameStep = false)
-              : widget.onCancel,
+          onCancel: _frameCancel,
           onContinue: _onFrameContinue,
         );
       },

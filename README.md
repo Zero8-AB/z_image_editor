@@ -401,6 +401,28 @@ Retake tool (camera icon, `ZFrameCropLabels.retakeLabel`), so a good photo can b
 retaken too. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
 `ZPhotoChecker` for your own checks.
 
+### Cancel (drop the photo)
+
+By default the frame step's top-left action is the editor's `cancelLabel` /
+`onCancel` (e.g. "Skip", keeping the photo as it is). For a photo just taken
+with the camera, pass `onDiscard` instead: the top-left action becomes
+"Cancel" (`ZFrameCropLabels.cancelLabel`) and the app closes the editor and
+drops the photo, e.g. back to its form with nothing added or changed. The
+whole photo stays available with "Full photo" + Next. Cancel is also what a
+reopened frame step shows (the editor's "‹ Frame" leads back to it), it is
+disabled while Next is applying, and once it was tapped the editor delivers
+nothing more (`onSaveAll`, `onArtworkSize`, `onFrameEvidence`, ...), even if
+the app closes it late.
+
+```dart
+ZImageEditor(
+  onRetake: () { Navigator.of(context).pop(); takeAnotherPhoto(); },
+  onDiscard: () => Navigator.of(context).pop(), // nothing added
+  onCancel: () => Navigator.of(context).pop(),
+  ...
+)
+```
+
 ### Safe areas
 
 Pass `edgeToEdge: true` to draw under transparent system bars (light
