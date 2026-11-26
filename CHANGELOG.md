@@ -41,6 +41,23 @@
 * `TransformationService.clampPanOffset` no longer throws when the allowed pan range is empty
 * the pixel fallback export applies brightness/contrast/saturation like the preview (brightness used to turn the image white or black)
 
+## [0.10.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.9.0...v0.10.0) (2026-11-26)
+
+
+### Features
+
+* always-available Retake tool in the frame step ([#150](https://github.com/Zero8-AB/z_image_editor/issues/150)) ([8726412](https://github.com/Zero8-AB/z_image_editor/commit/8726412f81b57c6e1540e71b2216b90177a4e577))
+* Cancel in the frame step (onDiscard) drops the photo ([#152](https://github.com/Zero8-AB/z_image_editor/issues/152)) ([a856b04](https://github.com/Zero8-AB/z_image_editor/commit/a856b041eecbdbf30436cc417a724c012a91b612))
+* frame step for painting photos ("Choose what to keep"), size tools, auto contrast ([#145](https://github.com/Zero8-AB/z_image_editor/issues/145)) ([3cf1e48](https://github.com/Zero8-AB/z_image_editor/commit/3cf1e481c6ac96a61dd8fdc8012f9c6c9f6065b7))
+* **frame:** size and reflections on the photo, three tools under the chips ([#154](https://github.com/Zero8-AB/z_image_editor/issues/154)) ([9de2170](https://github.com/Zero8-AB/z_image_editor/commit/9de21701f19d028e95c8ba5880e506401d9c882a))
+* report the frame step's shown size on Next (onArtworkSize) ([#148](https://github.com/Zero8-AB/z_image_editor/issues/148)) ([9daf983](https://github.com/Zero8-AB/z_image_editor/commit/9daf98334c5194ed89362e14496fbef740728d8a))
+
+
+### Bug Fixes
+
+* Auto colour fix never turns itself on; gentle maths that keep whites white ([#153](https://github.com/Zero8-AB/z_image_editor/issues/153)) ([c0c6a29](https://github.com/Zero8-AB/z_image_editor/commit/c0c6a29a37434f20ca65a4b664542a03fb1d5824))
+* **frame:** nested outline sizes stay in order; rough size for uncommon shapes; focal length across the diagonal ([#151](https://github.com/Zero8-AB/z_image_editor/issues/151)) ([247663d](https://github.com/Zero8-AB/z_image_editor/commit/247663d20f1dbc7a4dab6990d439b2e85dcb568e))
+
 ## [0.9.0](https://github.com/Zero8-AB/z_image_editor/compare/v0.8.2...v0.9.0) (2026-05-25)
 
 
