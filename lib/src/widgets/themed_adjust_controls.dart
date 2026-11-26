@@ -14,6 +14,10 @@ class ZAutoFixLabels {
   final String brightness;
   final String contrast;
   final String colour;
+
+  /// No longer shown: Auto never turns itself on, so the compare always
+  /// shows [compare].
+  @Deprecated('Auto never turns itself on; [compare] is always shown.')
   final String compareHazy;
   final String compare;
   final String before;
@@ -24,7 +28,7 @@ class ZAutoFixLabels {
     this.brightness = 'Brightness',
     this.contrast = 'Contrast',
     this.colour = 'Colour',
-    this.compareHazy =
+    @Deprecated('Auto never turns itself on.') this.compareHazy =
         'Drag to compare. Auto was turned on because the photo looked hazy.',
     this.compare = 'Drag to compare.',
     this.before = 'Before',
@@ -37,7 +41,8 @@ enum ZAdjustPanel { auto, brightness, contrast, saturation }
 
 /// Adjust tab in the themed look: a chip row "Auto · Brightness ·
 /// Contrast · Colour" and, for the sliders, the ruler; for Auto the compare
-/// hint. Auto is a toggle: one tap turns it off (or on again).
+/// hint. Auto is a toggle: it starts off; one tap turns it on (or off
+/// again).
 class ThemedAdjustControls extends StatefulWidget {
   final ZImageEditorTheme theme;
   final ImageEditorController controller;
@@ -46,9 +51,6 @@ class ThemedAdjustControls extends StatefulWidget {
 
   /// The Auto fix for this photo (null: none, no Auto chip).
   final List<double>? autoLevels;
-
-  /// Auto was turned on by the editor because the photo looked hazy.
-  final bool autoTurnedOnForHaze;
 
   final ZAdjustPanel panel;
   final ValueChanged<ZAdjustPanel> onPanel;
@@ -63,7 +65,6 @@ class ThemedAdjustControls extends StatefulWidget {
     this.settings = const AdjustTabSettings(),
     this.labels = const ZAutoFixLabels(),
     this.autoLevels,
-    this.autoTurnedOnForHaze = false,
     required this.panel,
     required this.onPanel,
     this.onAutoChanged,
@@ -173,7 +174,7 @@ class _ThemedAdjustControlsState extends State<ThemedAdjustControls> {
               ? const SizedBox.shrink()
               : Center(
                   child: Text(
-                    widget.autoTurnedOnForHaze ? l.compareHazy : l.compare,
+                    l.compare,
                     key: const Key('z_adjust_compare_hint'),
                     textAlign: TextAlign.center,
                     style: t.text(color: t.mutedTextColor, fontSize: 13),

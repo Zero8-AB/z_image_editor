@@ -82,22 +82,26 @@ ImageEditorState editorState(WidgetTester tester) =>
 
 void main() {
   group('ZAutoLevels', () {
-    test('a hazy photo: stretched to full range, flagged hazy', () {
+    test('a hazy photo: gently lifted, never flagged to turn on', () {
       final (rgba, w, h) = rgbaOf(hazyPng());
       final a = ZAutoLevels.analyzeRgba(rgba, w, h);
-      expect(a.hazy, isTrue);
+      // ignore: deprecated_member_use_from_same_package
+      expect(a.hazy, isFalse);
       expect(a.isNoop, isFalse);
-      // Darkest stripe goes near black, the mat near white and neutral.
-      expect(a.apply(0, 70), lessThan(15));
+      // The darkest stripe gets darker (black cut ≤ 24 levels), the mat
+      // lighter and a little more neutral (half strength, ≤ 6 %).
+      expect(a.apply(0, 70), inInclusiveRange(55, 68));
       final mat = [a.apply(0, 190), a.apply(1, 194), a.apply(2, 206)];
       expect(mat.reduce((x, y) => x < y ? x : y), greaterThan(225));
       final spread = mat.reduce((x, y) => x > y ? x : y) -
           mat.reduce((x, y) => x < y ? x : y);
-      expect(spread, lessThan(8), reason: 'white balance from the mat: $mat');
+      expect(spread, lessThan(16 * 1.25),
+          reason: 'white balance from the mat: $mat');
     });
 
-    test('a photo with full range is not hazy', () {
+    test('a photo with full range is not flagged', () {
       final (rgba, w, h) = rgbaOf(testPng());
+      // ignore: deprecated_member_use_from_same_package
       expect(ZAutoLevels.analyzeRgba(rgba, w, h).hazy, isFalse);
     });
 
@@ -113,7 +117,7 @@ void main() {
       return out;
     }
 
-    test('a tinted (not white) mat on a full-range photo is hazy', () {
+    test('a warm neutral mat is balanced gently, never flagged', () {
       // Full range 0..255 neutral ramp, plus a large yellowish mat.
       final rgba = rgbaFill(1000, (i) {
         if (i < 300) return [240, 236, 212];
@@ -121,17 +125,22 @@ void main() {
         return [v, v, v];
       });
       final a = ZAutoLevels.analyzeRgba(rgba, 40, 25);
-      expect(a.hazy, isTrue);
-      // The mat comes out more neutral.
+      // ignore: deprecated_member_use_from_same_package
+      expect(a.hazy, isFalse);
+      // The mat comes out more neutral, but only half way.
       final mat = [a.apply(0, 240), a.apply(1, 236), a.apply(2, 212)];
       expect(mat[0] - mat[2], lessThan(28 - 10));
+      expect(mat[0] - mat[2], greaterThan(5));
+      for (var c = 0; c < 3; c++) {
+        expect(a.gain[c], inInclusiveRange(0.94, 1.06));
+      }
     });
 
     test('values round-trip; stretch is capped', () {
       const a = ZAutoLevels(gain: [1.2, 1.1, 1.0], offset: [-10, -5, 0]);
       expect(ZAutoLevels.fromValues(a.values).gain, a.gain);
       expect(ZAutoLevels.fromValues(a.values).offset, a.offset);
-      // A nearly flat image can't be stretched more than maxGain (x contrast).
+      // A nearly flat image can't be stretched more than maxGain.
       final flat = Uint8List(4 * 100);
       for (var i = 0; i < 100; i++) {
         flat[i * 4] = flat[i * 4 + 1] = flat[i * 4 + 2] = 120 + i % 3;
@@ -142,7 +151,7 @@ void main() {
         expect(
             g,
             lessThanOrEqualTo(
-                ZAutoLevels.maxGain * ZAutoLevels.contrast * 1.16));
+                ZAutoLevels.maxGain * (1 + ZAutoLevels.maxBalance)));
       }
     });
 
@@ -201,7 +210,7 @@ void main() {
   for (final size in const [Size(360, 640), Size(390, 844)]) {
     final s = '${size.width.toInt()}x${size.height.toInt()}';
     group('Auto in the editor @ $s', () {
-      testWidgets('hazy photo: Auto first and on, compare with hint',
+      testWidgets('hazy photo: Auto first and off, no "hazy" caption',
           (tester) async {
         await pumpAutoEditor(tester, size, hazyPng());
         await openAdjust(tester);
@@ -213,11 +222,17 @@ void main() {
         }
         expect(find.text('Auto'), findsOneWidget);
         expect(find.text('Colour'), findsOneWidget);
+        // Auto never turns itself on.
+        expect(editorState(tester).autoLevels, isNull);
+        expect(find.textContaining('hazy'), findsNothing);
+        expect(find.byKey(const Key('z_compare')), findsNothing);
+        expect(find.byKey(const Key('z_adjust_compare_hint')), findsNothing);
+        // The user turns it on: Before/After compare.
+        await tester.tap(find.byKey(const Key('z_adjust_auto')));
+        await tester.pump();
         expect(editorState(tester).autoLevels, isNotNull);
-        expect(
-            find.text('Drag to compare. Auto was turned on because the '
-                'photo looked hazy.'),
-            findsOneWidget);
+        expect(find.text('Drag to compare.'), findsOneWidget);
+        expect(find.textContaining('hazy'), findsNothing);
         expect(find.byKey(const Key('z_compare')), findsOneWidget);
         expect(find.text('Before'), findsOneWidget);
         expect(find.text('After'), findsOneWidget);
@@ -229,6 +244,8 @@ void main() {
       testWidgets('dragging moves the compare line', (tester) async {
         await pumpAutoEditor(tester, size, hazyPng());
         await openAdjust(tester);
+        await tester.tap(find.byKey(const Key('z_adjust_auto')));
+        await tester.pump();
         final line = find.byKey(const Key('z_compare_line'));
         final x0 = tester.getCenter(line).dx;
         await dragStepwise(
@@ -242,27 +259,29 @@ void main() {
         expect(tester.getCenter(line).dx, lessThanOrEqualTo(size.width));
       });
 
-      testWidgets('one tap turns Auto off, another turns it back on',
+      testWidgets('one tap turns Auto on, another turns it off again',
           (tester) async {
         await pumpAutoEditor(tester, size, hazyPng());
         await openAdjust(tester);
+        expect(editorState(tester).autoLevels, isNull);
+        await tester.tap(find.byKey(const Key('z_adjust_auto')));
+        await tester.pump();
+        expect(editorState(tester).autoLevels, isNotNull);
+        expect(find.byKey(const Key('z_compare')), findsOneWidget);
+        expect(find.text('Drag to compare.'), findsOneWidget);
         await tester.tap(find.byKey(const Key('z_adjust_auto')));
         await tester.pump();
         expect(editorState(tester).autoLevels, isNull);
         expect(find.byKey(const Key('z_compare')), findsNothing);
         expect(find.byKey(const Key('z_adjust_compare_hint')), findsNothing);
-        await tester.tap(find.byKey(const Key('z_adjust_auto')));
-        await tester.pump();
-        expect(editorState(tester).autoLevels, isNotNull);
-        expect(find.byKey(const Key('z_compare')), findsOneWidget);
-        // Turned on by the user: no "because it looked hazy".
-        expect(find.text('Drag to compare.'), findsOneWidget);
       });
 
       testWidgets('Brightness / Contrast / Colour show the ruler, no compare',
           (tester) async {
         await pumpAutoEditor(tester, size, hazyPng());
         await openAdjust(tester);
+        await tester.tap(find.byKey(const Key('z_adjust_auto')));
+        await tester.pump();
         for (final k in ['brightness', 'contrast', 'saturation']) {
           // The pill row scrolls when it doesn't fit.
           await tester.ensureVisible(find.byKey(Key('z_adjust_$k')));
@@ -290,20 +309,27 @@ void main() {
         expect(editorState(tester).saturation, 1.0);
       });
 
-      testWidgets('a clear photo: Auto offered but off', (tester) async {
+      testWidgets('a dark photo Auto would not change: no Auto chip, off',
+          (tester) async {
+        // Top at 90 (no white to lift), blacks at 20: nothing to do.
         await pumpAutoEditor(tester, size, testPng());
         await openAdjust(tester);
-        expect(find.byKey(const Key('z_adjust_auto')), findsOneWidget);
+        expect(find.byKey(const Key('z_adjust_auto')), findsNothing);
         expect(editorState(tester).autoLevels, isNull);
         expect(find.byKey(const Key('z_compare')), findsNothing);
       });
     });
   }
 
-  testWidgets('Save exports with Auto applied', (tester) async {
+  testWidgets('Save exports with Auto applied (turned on by the user)',
+      (tester) async {
     List<File>? saved;
     await pumpAutoEditor(tester, const Size(390, 844), hazyPng(),
         onSave: (f) => saved = f);
+    expect(editorState(tester).autoLevels, isNull);
+    await openAdjust(tester);
+    await tester.tap(find.byKey(const Key('z_adjust_auto')));
+    await tester.pump();
     expect(editorState(tester).autoLevels, isNotNull);
     await tester.runAsync(() async {
       await tester.tap(find.text('Done'));
@@ -314,11 +340,11 @@ void main() {
     });
     expect(saved, isNotNull);
     final out = img.decodeImage(saved!.first.readAsBytesSync())!;
-    // The washed-out stripe (70) is now near black.
+    // The washed-out stripe (70) is darker (gentle black cut).
     var darkest = 255;
     for (final p in out) {
       if (p.r < darkest) darkest = p.r.toInt();
     }
-    expect(darkest, lessThan(30));
+    expect(darkest, lessThan(68));
   });
 }
