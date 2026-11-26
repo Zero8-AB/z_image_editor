@@ -514,7 +514,11 @@ anchor for other outlines. A round outline keeps one diameter.
 
 `onArtworkSizeConfirmed` gets the confirmed size (`anchorSize`) once per
 size whichever outline Next is pressed on; `onArtworkSize` the selected
-outline's shown size.
+outline's shown size. The sheet stamps the confirmed size with
+`ZArtworkSize.includesFrame` (its own `includesFrame`, i.e. not
+`_insideOuter`), so the host knows whether it is with or without the frame
+after Next on another outline; details, measured and estimated sizes leave
+it null.
 
 `ZCommonSizes.estimate` is `bestFit` (within 5 %), else the shape itself at
 the area of `ZCommonSizes.typical` (50 × 40) with sides rounded to 5 cm.

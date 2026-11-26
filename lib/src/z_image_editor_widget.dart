@@ -134,9 +134,11 @@ class ZImageEditor extends StatefulWidget {
   final ZArtworkSize? artworkSize;
 
   /// Called on Next with the size the user confirmed in the size sheet,
-  /// once per confirmed size, whichever outline is selected on Next (the
-  /// sheet says whether it is with or without the frame). The selected
-  /// outline's own size goes to [onArtworkSize].
+  /// once per confirmed size, whichever outline is selected on Next. Its
+  /// [ZArtworkSize.includesFrame] says which outline it was confirmed on:
+  /// true for the outermost one (the sheet's fields were headed "including
+  /// frame"), false for one inside the frame ("without frame"). The
+  /// selected outline's own size goes to [onArtworkSize].
   final ValueChanged<ZArtworkSize>? onArtworkSizeConfirmed;
 
   /// Called on Next in the frame step with the size the step shows, whatever

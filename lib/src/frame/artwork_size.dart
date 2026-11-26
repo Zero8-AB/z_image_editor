@@ -24,11 +24,23 @@ class ZArtworkSize {
   final double? depthCm;
   final ZSizeSource source;
 
+  /// Whether the size is the outside of the frame: true when it was
+  /// confirmed in the size sheet on the outermost outline (fields headed
+  /// "Dimensions, including frame"), false when on an outline inside it
+  /// (mat window, artwork: "without frame"). Null when not known: sizes from
+  /// the artwork's details, measured sizes and "≈" estimates.
+  ///
+  /// Follows [ZArtworkSizeSheet.includesFrame]: on a photo with a single
+  /// outline (no frame found) it is true, as the sheet asked for the size
+  /// "including frame".
+  final bool? includesFrame;
+
   const ZArtworkSize({
     required this.heightCm,
     required this.widthCm,
     this.depthCm,
     this.source = ZSizeSource.confirmed,
+    this.includesFrame,
   });
 
   /// Whether the numbers are known (not a guess): no "≈".
@@ -42,12 +54,14 @@ class ZArtworkSize {
     double? widthCm,
     double? depthCm,
     ZSizeSource? source,
+    bool? includesFrame,
   }) =>
       ZArtworkSize(
         heightCm: heightCm ?? this.heightCm,
         widthCm: widthCm ?? this.widthCm,
         depthCm: depthCm ?? this.depthCm,
         source: source ?? this.source,
+        includesFrame: includesFrame ?? this.includesFrame,
       );
 
   /// "50 × 40" (no unit), numbers without trailing ".0".
@@ -59,13 +73,20 @@ class ZArtworkSize {
       other.heightCm == heightCm &&
       other.widthCm == widthCm &&
       other.depthCm == depthCm &&
-      other.source == source;
+      other.source == source &&
+      other.includesFrame == includesFrame;
 
   @override
-  int get hashCode => Object.hash(heightCm, widthCm, depthCm, source);
+  int get hashCode =>
+      Object.hash(heightCm, widthCm, depthCm, source, includesFrame);
 
   @override
-  String toString() => 'ZArtworkSize($hwText × ${depthCm ?? '-'} cm, $source)';
+  String toString() => 'ZArtworkSize($hwText × ${depthCm ?? '-'} cm, $source'
+      '${switch (includesFrame) {
+        true => ', including frame',
+        false => ', without frame',
+        null => '',
+      }})';
 }
 
 /// "50", "0.1", "42.5" (one decimal at most, no trailing zero).

@@ -388,7 +388,12 @@ sheet (height × width × depth, common sizes, depth quick picks).
 - `onArtworkSizeConfirmed` reports the size the user confirmed in the
   sheet (after Next, once per confirmed size), whichever outline is
   selected on Next; `onArtworkSize` then carries the selected outline's
-  own size.
+  own size. `ZArtworkSize.includesFrame` says what the confirmed size is
+  of: `true` when it was confirmed on the outermost outline (fields headed
+  "including frame"; also on a photo with a single outline), `false` on an
+  outline inside it ("without frame": mat window, artwork). It is kept
+  when Next is pressed on another outline, and is `null` when not known
+  (sizes from the details, measured sizes, "≈" estimates).
 - `onArtworkSize` reports the size the frame step shows on Next, whatever its
   source: exact, or the "≈" estimate (`ZSizeSource.estimated`, no depth).
 - The sheet's fields, common sizes and depth chips take their colours from
@@ -406,7 +411,8 @@ ZImageEditor(
   enableSizeTools: true,
   artworkSize: const ZArtworkSize(
       heightCm: 50, widthCm: 40, depthCm: 2, source: ZSizeSource.details),
-  onArtworkSizeConfirmed: (size) => saveToForm(size),
+  onArtworkSizeConfirmed: (size) =>
+      saveToForm(size, withFrame: size.includesFrame ?? true),
   ...
 )
 ```

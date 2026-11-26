@@ -6,6 +6,7 @@
 
 * Retake tool in the frame step's tool row (`ZFrameCropLabels.retakeLabel`, `ZLineIconKind.camera`): always shown when `onRetake` is set, not only in a photo hint
 * shown size on Next (`onArtworkSize`, `FrameCropResult.shownSize`): the size the frame step shows when the user taps Next, exact (details, measured, confirmed) or the "≈" estimate (`ZSizeSource.estimated`, no depth), e.g. to fill a form's empty size fields; called on every Next (also after reopening the frame step and once per image), so treat it as idempotent
+* confirmed size with or without the frame (`ZArtworkSize.includesFrame`): `true` when the size was confirmed in the sheet on the outermost outline ("Dimensions, including frame"), `false` on an outline inside it ("without frame"), kept when Next is pressed on another outline; `null` for details, measured and estimated sizes. Optional, so existing hosts are unaffected
 * frame evidence (`onFrameEvidence`, `ZFrameEvidence`, `ZFrameLevel`, `ZFrameCandidate.level` / `matAround`, `FrameCropResult.evidence`): frame, mat, glass reflections and shape seen in the frame step, for medium suggestions
 * size sheet restyle: labels Height / Width / Depth under "Dimensions, including frame (cm)", no × separators, 48 px fields and buttons, colours from `ZImageEditorTheme.size*` (neutral defaults)
 * `FrameMeasurementLines` is exported (the app draws measured sizes on its live camera)

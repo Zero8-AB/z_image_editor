@@ -101,6 +101,7 @@ class ZArtworkSizeSheet extends StatefulWidget {
 
   /// Whether the size is for the outermost outline (the fields are headed
   /// "including frame") or for one inside the frame ("without frame").
+  /// The confirmed size carries it as [ZArtworkSize.includesFrame].
   final bool includesFrame;
   final ValueChanged<ZArtworkSize> onConfirm;
   final VoidCallback onKeepEstimate;
@@ -283,6 +284,7 @@ class _ZArtworkSizeSheetState extends State<ZArtworkSizeSheet> {
       widthCm: _width!,
       depthCm: _depth,
       source: ZSizeSource.confirmed,
+      includesFrame: widget.includesFrame,
     ));
   }
 

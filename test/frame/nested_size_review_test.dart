@@ -250,11 +250,56 @@ void main() {
       await selectChip(tester, 0);
       await tester.tap(find.byKey(const Key('z_frame_continue')));
       await settleAsync(tester, 60);
-      expect(confirmed,
-          [const ZArtworkSize(heightCm: 70, widthCm: 50, depthCm: 2)]);
+      // Confirmed on the frame: it includes the frame, also when Next is
+      // pressed on the artwork.
+      expect(confirmed, [
+        const ZArtworkSize(
+            heightCm: 70, widthCm: 50, depthCm: 2, includesFrame: true)
+      ]);
       expect(shown, hasLength(1));
       expect(shown.single.source, ZSizeSource.estimated);
       expect(shown.single.heightCm, lessThan(70));
+      // An estimate for another outline: not known.
+      expect(shown.single.includesFrame, isNull);
+    });
+
+    testWidgets('confirmed on the frame: the size includes the frame',
+        (tester) async {
+      final (confirmed, shown) = await pump(tester);
+      await confirmPreset(tester, '70 × 50');
+      await tester.tap(find.byKey(const Key('z_frame_continue')));
+      await settleAsync(tester, 60);
+      expect(confirmed.single.hwText, '70 × 50');
+      expect(confirmed.single.includesFrame, isTrue);
+      // The shown size is the confirmed one, with the same flag.
+      expect(shown.single.includesFrame, isTrue);
+    });
+
+    testWidgets('confirmed on the artwork: the size is without the frame',
+        (tester) async {
+      final (confirmed, shown) = await pump(tester);
+      await selectChip(tester, 0);
+      await confirmPreset(tester, '70 × 50');
+      await tester.tap(find.byKey(const Key('z_frame_continue')));
+      await settleAsync(tester, 60);
+      expect(confirmed.single.hwText, '70 × 50');
+      expect(confirmed.single.includesFrame, isFalse);
+      expect(shown.single.includesFrame, isFalse);
+    });
+
+    testWidgets(
+        'confirmed on the artwork, Next on the frame: reported without the '
+        'frame', (tester) async {
+      final (confirmed, shown) = await pump(tester);
+      await selectChip(tester, 0);
+      await confirmPreset(tester, '70 × 50');
+      await selectChip(tester, 2);
+      await tester.tap(find.byKey(const Key('z_frame_continue')));
+      await settleAsync(tester, 60);
+      expect(confirmed.single.hwText, '70 × 50');
+      expect(confirmed.single.includesFrame, isFalse);
+      expect(shown.single.source, ZSizeSource.estimated);
+      expect(shown.single.includesFrame, isNull);
     });
 
     testWidgets('a confirmed size is reported once, not on every Next',

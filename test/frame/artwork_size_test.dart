@@ -25,6 +25,22 @@ void main() {
     expect(s, const ZArtworkSize(heightCm: 50, widthCm: 40, depthCm: 2));
   });
 
+  test('ZArtworkSize.includesFrame: unknown by default, part of equality', () {
+    const s = ZArtworkSize(heightCm: 50, widthCm: 40, depthCm: 2);
+    expect(s.includesFrame, isNull);
+    final framed = s.copyWith(includesFrame: true);
+    expect(framed.includesFrame, isTrue);
+    expect(framed, isNot(s));
+    expect(framed.hashCode, isNot(s.hashCode));
+    expect(framed.copyWith(includesFrame: false), isNot(framed));
+    // copyWith keeps the flag.
+    expect(framed.copyWith(depthCm: 3).includesFrame, isTrue);
+    expect(framed.toString(), contains('including frame'));
+    expect(framed.copyWith(includesFrame: false).toString(),
+        contains('without frame'));
+    expect(s.toString(), isNot(contains('frame')));
+  });
+
   group('ZCommonSizes', () {
     test('upright art gets upright sizes, wide art wide sizes', () {
       expect(ZCommonSizes.forAspect(1.25).first.label, '40 × 30');
