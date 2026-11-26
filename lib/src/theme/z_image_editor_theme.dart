@@ -36,7 +36,7 @@ class ZImageEditorTheme {
   /// Text on top of [accentColor].
   final Color onAccentColor;
 
-  /// Colour of an "on" toggle in the tool row (e.g. reflection removal).
+  /// Colour of an "on" tool or tab, and of a confirmed size on the photo.
   final Color toggleOnColor;
 
   /// UI font (null = platform default) and the screen-title font.

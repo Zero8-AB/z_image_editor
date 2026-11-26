@@ -23,6 +23,9 @@ enum ZLineIconKind {
 
   /// Retake the photo: a camera.
   camera,
+
+  /// Change a value shown on the photo (the size): a pen.
+  edit,
   close,
   check,
   auto,
@@ -191,6 +194,18 @@ class _LineIconPainter extends CustomPainter {
           p,
         );
         canvas.drawCircle(const Offset(12, 13), 3.5, p);
+      case ZLineIconKind.edit:
+        canvas.drawPath(
+          Path()
+            ..moveTo(4, 20)
+            ..lineTo(4, 16)
+            ..lineTo(15, 5)
+            ..lineTo(19, 9)
+            ..lineTo(8, 20)
+            ..close(),
+          p,
+        );
+        line(12.5, 7.5, 16.5, 11.5);
       case ZLineIconKind.close:
         line(6, 6, 18, 18);
         line(18, 6, 6, 18);
@@ -378,6 +393,164 @@ class ZToolButton extends StatelessWidget {
   /// scales the label down to fit instead of growing the row).
   static double toolLabelHeight(ZImageEditorTheme theme, int lines) =>
       (theme.toolLabelFontSize * 1.45 * lines).ceilToDouble();
+}
+
+/// Small pill on top of the photo: an icon (a spinner while [busy]) and a
+/// one-line label that ellipsizes when there is no room. Dark and
+/// see-through (the panel colour), or filled with the accent colour when
+/// [filled]. The pill is about 30 px tall inside a tap area of at least
+/// 44 px.
+class ZPhotoPill extends StatelessWidget {
+  final ZImageEditorTheme theme;
+  final ZLineIconKind icon;
+  final String label;
+
+  /// Shown instead of [label] when there is no room for all of it (e.g.
+  /// the size without "· Check"); accessibility always gets [label].
+  final String? shortLabel;
+  final VoidCallback? onTap;
+
+  /// Icon and label in the theme's toggle colour (e.g. a confirmed size).
+  final bool active;
+
+  /// Filled with the accent colour (a toggle that is on).
+  final bool filled;
+
+  /// Shows a small spinner in place of the icon.
+  final bool busy;
+
+  /// Exposes on/off state to accessibility (for toggles).
+  final bool? toggled;
+
+  const ZPhotoPill({
+    super.key,
+    required this.theme,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.shortLabel,
+    this.active = false,
+    this.filled = false,
+    this.busy = false,
+    this.toggled,
+  });
+
+  static const double _fontSize = 13;
+  static const double _iconSize = 16;
+  static const double _iconGap = 6;
+  static const double _padX = 12;
+  static const double _padY = 4;
+
+  /// Smallest tap area (and the pill's smallest width).
+  static const double minTapSize = 44;
+
+  /// Height of the visible pill at text scale 1.
+  static const double pillHeight = 30;
+
+  static TextStyle _style(ZImageEditorTheme theme, Color color) => theme
+      .text(color: color, fontSize: _fontSize, fontWeight: FontWeight.w500)
+      .copyWith(height: 18 / _fontSize);
+
+  /// The size the pill takes for [label] when it has all the room it wants
+  /// (tap area included), at the current text scale.
+  static Size sizeFor(
+      BuildContext context, ZImageEditorTheme theme, String label) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: DefaultTextStyle.of(context)
+            .style
+            .merge(_style(theme, theme.textColor)),
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final size = Size(
+      math.max(minTapSize,
+          (tp.width + _iconSize + _iconGap + _padX * 2).ceilToDouble() + 1),
+      math.max(minTapSize, math.max(pillHeight, tp.height + _padY * 2)),
+    );
+    tp.dispose();
+    return size;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = filled
+        ? theme.onAccentColor
+        : onTap == null
+            ? theme.disabledColor
+            : active
+                ? theme.toggleOnColor
+                : theme.textColor;
+    return Semantics(
+      button: true,
+      toggled: toggled,
+      enabled: onTap != null,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        // Opaque also when disabled: a tap on the pill never reaches the
+        // photo underneath.
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: LayoutBuilder(
+          builder: (context, constraints) => _pill(
+            color,
+            shortLabel != null &&
+                    constraints.maxWidth < sizeFor(context, theme, label).width
+                ? shortLabel!
+                : label,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pill(Color color, String shown) => ConstrainedBox(
+        constraints:
+            const BoxConstraints(minWidth: minTapSize, minHeight: minTapSize),
+        child: Center(
+          widthFactor: 1,
+          heightFactor: 1,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: pillHeight),
+            padding:
+                const EdgeInsets.symmetric(horizontal: _padX, vertical: _padY),
+            decoration: BoxDecoration(
+              color: filled
+                  ? theme.accentColor
+                  : theme.panelColor.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (busy)
+                  SizedBox(
+                    width: _iconSize,
+                    height: _iconSize,
+                    child: CupertinoActivityIndicator(
+                        radius: _iconSize / 2 - 1, color: color),
+                  )
+                else
+                  ZLineIcon(icon, color: color, size: _iconSize),
+                const SizedBox(width: _iconGap),
+                Flexible(
+                  child: Text(
+                    shown,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: _style(theme, color),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 /// Text whose width does not change between normal and medium weight: it

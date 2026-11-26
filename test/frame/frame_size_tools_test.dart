@@ -51,8 +51,8 @@ Future<SizeHarness> pumpSizeStep(
   return h;
 }
 
-ZToolButton sizeButton(WidgetTester t) =>
-    t.widget<ZToolButton>(find.byKey(const Key('z_frame_size')));
+ZPhotoPill sizeButton(WidgetTester t) =>
+    t.widget<ZPhotoPill>(find.byKey(const Key('z_frame_size')));
 
 String label(WidgetTester t, String key) => t
     .widget<Text>(
@@ -63,21 +63,21 @@ void main() {
   for (final size in const [Size(360, 640), Size(390, 844)]) {
     final s = '${size.width.toInt()}x${size.height.toInt()}';
     group('size tools @ $s', () {
-      testWidgets('estimated: "≈ 40 × 30 cm · Check", dashed icon, ≈ lines',
+      testWidgets('estimated: "≈ 40 × 30 cm · Check", pen icon, ≈ lines',
           (tester) async {
         await pumpSizeStep(tester, size);
         final b = sizeButton(tester);
         expect(b.label, '≈ 40 × 30 cm · Check');
-        expect(b.icon, ZLineIconKind.sizeEstimated);
+        expect(b.icon, ZLineIconKind.edit);
         expect(b.active, isFalse);
         expect(label(tester, 'z_frame_height_label'), '≈ 40 cm');
         expect(label(tester, 'z_frame_width_label'), '≈ 30 cm');
-        // Size comes first in the tool row.
-        final x = tester.getCenter(find.byKey(const Key('z_frame_size'))).dx;
+        // Size sits on the photo, not in the tool row.
         expect(
-            x,
-            lessThan(
-                tester.getCenter(find.byKey(const Key('z_frame_rotate'))).dx));
+            find.descendant(
+                of: find.byKey(const Key('z_frame_canvas')),
+                matching: find.byKey(const Key('z_frame_size'))),
+            findsOneWidget);
       });
 
       testWidgets('Size opens the sheet; Confirm locks the size',
@@ -144,7 +144,7 @@ void main() {
                   source: ZSizeSource.details));
           final b = sizeButton(tester);
           expect(b.label, '≈ 40 × 30 cm · Check');
-          expect(b.icon, ZLineIconKind.sizeEstimated);
+          expect(b.icon, ZLineIconKind.edit);
           expect(b.active, isFalse);
           expect(label(tester, 'z_frame_height_label'), '≈ 40 cm');
           await tester.runAsync(() async {
@@ -189,7 +189,7 @@ void main() {
         // 0.1 × 400 px high, 0.9 × 300 px wide: about 1 : 7, at the area of
         // the typical 50 × 40, sides rounded to 5 cm.
         expect(sizeButton(tester).label, '≈ 15 × 115 cm · Check');
-        expect(sizeButton(tester).icon, ZLineIconKind.sizeEstimated);
+        expect(sizeButton(tester).icon, ZLineIconKind.edit);
         expect(label(tester, 'z_frame_height_label'), '≈ 15 cm');
         expect(label(tester, 'z_frame_width_label'), '≈ 115 cm');
       });

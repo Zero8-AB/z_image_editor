@@ -58,7 +58,7 @@ class _Enhancer extends ZImageEnhancer {
 }
 
 /// The busiest frame step: shape label, three chips, hint banner, size and
-/// reflection tools; the outer outline is the whole photo, so its handles
+/// reflections on the photo, Retake; the outer outline is the whole photo, so its handles
 /// sit at the photo's edges.
 Widget busyStep() => FrameCropView(
       imageBytes: testPng(w: 300, h: 300),
@@ -100,6 +100,10 @@ void main() {
         expect(next.top, greaterThanOrEqualTo(p.top));
         expect(find.byKey(const Key('z_hint_banner')), findsOneWidget);
         expect(find.byKey(const Key('z_frame_shape_label')), findsOneWidget);
+        // Reset (under the tool row) shows once something changed.
+        await tester.tap(find.byKey(const Key('z_frame_rotate')));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
         final reset = tester.getRect(find.byKey(const Key('z_frame_reset')));
         expect(reset.bottom, lessThanOrEqualTo(p.size.height - p.bottom));
         final margin = p.gesture + 12 > 24 ? p.gesture + 12 : 24.0;
@@ -110,7 +114,12 @@ void main() {
               reason: 'handle $i');
         }
         // Every tool and chip is still at least 44 px tall.
-        for (final k in const ['z_frame_size', 'z_frame_reset']) {
+        for (final k in const [
+          'z_frame_size',
+          'z_frame_enhance',
+          'z_frame_retake',
+          'z_frame_reset',
+        ]) {
           expect(tester.getSize(find.byKey(Key(k))).height,
               greaterThanOrEqualTo(44));
         }

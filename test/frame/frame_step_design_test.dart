@@ -132,18 +132,19 @@ void main() {
         expect(find.text('Artwork · edited'), findsOneWidget);
       });
 
-      testWidgets('tool row: Rotate, Full photo, Reset (greyed when clean)',
+      testWidgets('tool row: Rotate, Full photo; Reset only when changed',
           (tester) async {
         await pumpDesign(tester, size);
         expect(find.text('Rotate'), findsOneWidget);
         expect(find.text('Full photo'), findsOneWidget);
-        expect(tool(tester, 'z_frame_reset').onTap, isNull);
+        final reset = find.byKey(const Key('z_frame_reset'));
+        expect(reset, findsNothing);
         await tester.tap(find.byKey(const Key('z_frame_rotate')));
         await tester.pump();
-        expect(tool(tester, 'z_frame_reset').onTap, isNotNull);
-        await tester.tap(find.byKey(const Key('z_frame_reset')));
+        expect(reset, findsOneWidget);
+        await tester.tap(reset);
         await tester.pump();
-        expect(tool(tester, 'z_frame_reset').onTap, isNull);
+        expect(reset, findsNothing);
         await tester.tap(find.byKey(const Key('z_frame_full')));
         await tester.pump();
         expect(tool(tester, 'z_frame_full').active, isTrue);
@@ -156,17 +157,21 @@ void main() {
           (tester) async {
         await pumpDesign(tester, size,
             enhancer: FakeEnhancer(testPng(w: 300, h: 400)));
-        final on = tool(tester, 'z_frame_enhance');
-        expect(on.active, isTrue);
-        expect(on.label, 'No reflections');
+        ZPhotoPill pill() =>
+            tester.widget<ZPhotoPill>(find.byKey(const Key('z_frame_enhance')));
+        expect(pill().filled, isTrue);
+        expect(pill().label, 'No reflections');
         await tester.tap(find.byKey(const Key('z_frame_enhance')));
         await tester.pump();
-        expect(tool(tester, 'z_frame_enhance').label, 'Reflections shown');
-        expect(tool(tester, 'z_frame_enhance').active, isFalse);
+        expect(pill().label, 'Reflections shown');
+        expect(pill().filled, isFalse);
       });
 
       testWidgets('tool buttons are at least 44 px tall', (tester) async {
         await pumpDesign(tester, size);
+        // Reset is there once something changed.
+        await tester.tap(find.byKey(const Key('z_frame_rotate')));
+        await tester.pump();
         for (final k in ['z_frame_rotate', 'z_frame_full', 'z_frame_reset']) {
           expect(tester.getSize(find.byKey(Key(k))).height,
               greaterThanOrEqualTo(44));

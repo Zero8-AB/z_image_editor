@@ -175,16 +175,10 @@ void main() {
       testWidgets('Wrong? → Oval changes the label, the result and Reset',
           (tester) async {
         final run = await pumpRound(tester, size, roundLevels);
-        final reset =
-            tester.widget<ZToolButton>(find.byKey(const Key('z_frame_reset')));
-        expect(reset.onTap, isNull);
+        expect(find.byKey(const Key('z_frame_reset')), findsNothing);
         await tapWrongAndPick(tester, ZFrameShape.oval);
         expect(shapeText(tester), 'Oval frame found');
-        expect(
-            tester
-                .widget<ZToolButton>(find.byKey(const Key('z_frame_reset')))
-                .onTap,
-            isNotNull);
+        expect(find.byKey(const Key('z_frame_reset')), findsOneWidget);
         await tester.tap(find.byKey(const Key('z_frame_continue')));
         await settleAsync(tester);
         expect(run.result!.shape, ZFrameShape.oval);
@@ -272,7 +266,7 @@ void main() {
             ],
             sizeTools: true);
         final label = tester
-            .widget<ZToolButton>(find.byKey(const Key('z_frame_size')))
+            .widget<ZPhotoPill>(find.byKey(const Key('z_frame_size')))
             .label;
         final m = RegExp(r"([\d.,]+) × ([\d.,]+)").firstMatch(label);
         expect(m, isNotNull, reason: label);

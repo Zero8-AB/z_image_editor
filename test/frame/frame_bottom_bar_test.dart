@@ -19,12 +19,7 @@ Finder chip(int i) => find.byKey(Key('z_frame_chip_$i'));
 Rect chipPill(WidgetTester t, int i) => t.getRect(
     find.descendant(of: chip(i), matching: find.byType(Container)).first);
 
-const toolKeys = [
-  'z_frame_size',
-  'z_frame_rotate',
-  'z_frame_full',
-  'z_frame_reset'
-];
+const toolKeys = ['z_frame_rotate', 'z_frame_full'];
 
 Map<String, Rect> barRects(WidgetTester t) => {
       for (var i = 0; i < 3; i++) 'chip $i': t.getRect(chip(i)),
@@ -156,18 +151,31 @@ void main() {
       });
 
       testWidgets(
-          '"≈ 50 × 50 cm · Check" fits in two lines; confirming the size '
-          'moves no other button', (tester) async {
+          '"≈ 50 × 50 cm · Check" fits on one line in its pill; confirming '
+          'the size moves no button', (tester) async {
         await pumpRound(tester, size, roundLevels, sizeTools: true);
         expect(tester.takeException(), isNull);
         final label = find.descendant(
             of: find.byKey(const Key('z_frame_size')),
             matching: find.byType(Text));
-        expect(tester.widget<Text>(label).data, '≈ 50 × 50 cm\n· Check');
+        // All of it where there is room, else without "· Check".
+        final pill =
+            tester.widget<ZPhotoPill>(find.byKey(const Key('z_frame_size')));
+        expect(pill.label, '≈ 50 × 50 cm · Check');
+        expect(pill.shortLabel, '≈ 50 × 50 cm');
+        expect(tester.widget<Text>(label).data,
+            isIn([pill.label, pill.shortLabel]));
         final button = tester.getRect(find.byKey(const Key('z_frame_size')));
         final text = tester.getRect(label);
         expect(text.top, greaterThanOrEqualTo(button.top));
         expect(text.bottom, lessThanOrEqualTo(button.bottom + 0.01));
+        expect(text.left, greaterThanOrEqualTo(button.left));
+        expect(text.right, lessThanOrEqualTo(button.right + 0.01));
+        // The round outline's bottom handle is in the label's place: the
+        // label sits next to it, not on it, and may be cut short there.
+        final handle =
+            tester.getRect(find.byKey(const Key('z_frame_handle_2')));
+        expect(button.overlaps(handle), isFalse);
         final before = barRects(tester);
         // Icons on one line.
         final iconTops = {

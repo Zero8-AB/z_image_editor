@@ -298,7 +298,8 @@ When only one tab is enabled the tab bar is hidden automatically.
 
 Pass a `ZFrameDetector` and the editor opens in a "choose the frame" step
 first: the photo with four draggable corners (with a magnifier), up to three
-suggested outlines as chips, and tools for Rotate, Full photo and Reset.
+suggested outlines as chips, and tools for Rotate and Full photo (Reset
+appears under them once something was changed).
 "Next" straightens the chosen quad at full resolution (pure Dart, background
 isolate on native) and continues in the regular crop/adjust editor. The
 editor header then shows "‹ Frame" to go back.
@@ -351,8 +352,9 @@ ZImageEditor(
 
 ### Artwork size and the right shape
 
-With `enableSizeTools: true` the frame step shows a **Size** tool first in
-the tool row, red measurement lines next to the outline
+With `enableSizeTools: true` the frame step shows the **size** on the photo
+(a small label at the bottom, tap to change), red measurement lines next to
+the outline
 (`ZImageEditorTheme.showMeasurements`) and a "Real size of the artwork"
 sheet (height × width × depth, common sizes, depth quick picks).
 
@@ -424,7 +426,7 @@ step. At most one banner is shown (in this order): a strong reflection on
 the glass, part of the frame outside the photo, too dark, blurry. "Retake"
 appears when `onRetake` is set (the app closes the editor and opens the
 camera again); "Use anyway" and the cross close the banner. Nothing is ever
-blocked. With `onRetake` set, the frame step's tool row also always shows a
+blocked. With `onRetake` set, the frame step's tool row also always starts with a
 Retake tool (camera icon, `ZFrameCropLabels.retakeLabel`), so a good photo can be
 retaken too. Texts: `photoHintLabels` (`ZPhotoHintLabels`). Implement
 `ZPhotoChecker` for your own checks.

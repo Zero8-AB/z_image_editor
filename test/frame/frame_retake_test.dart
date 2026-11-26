@@ -12,13 +12,12 @@ import 'frame_step_design_test.dart' show designTheme;
 
 const retakeKey = Key('z_frame_retake');
 
+/// The tool row, left to right (size and reflections are on the photo,
+/// Reset is under the row).
 const allTools = [
-  'z_frame_size',
-  'z_frame_enhance',
+  'z_frame_retake',
   'z_frame_rotate',
   'z_frame_full',
-  'z_frame_reset',
-  'z_frame_retake',
 ];
 
 Future<void> pumpFrame(
@@ -90,8 +89,7 @@ void main() {
   for (final scale in const [1.0, 1.3]) {
     for (final size in const [Size(360, 640), Size(430, 932)]) {
       final s = '${size.width.toInt()}x${size.height.toInt()} @ ${scale}x';
-      testWidgets('tool row with Retake and every other tool fits ($s)',
-          (tester) async {
+      testWidgets('tool row with Retake fits ($s)', (tester) async {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await pumpFrame(tester,
@@ -137,10 +135,8 @@ void main() {
     await pumpFrame(tester, size: const Size(360, 640), onRetake: () {});
     Map<String, Rect> bar() => {
           for (final k in [
-            'z_frame_size',
             'z_frame_rotate',
             'z_frame_full',
-            'z_frame_reset',
             'z_frame_retake',
           ])
             k: tester.getRect(find.byKey(Key(k))),
