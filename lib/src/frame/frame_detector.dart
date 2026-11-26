@@ -240,10 +240,11 @@ class ZFrameCropLabels {
   /// Shown when the detector found nothing (or none is set).
   final String manualHint;
 
-  /// Appended to an estimated size on the Size tool ("≈ 50 × 40 cm · Check").
+  /// Appended to an estimated size on the photo ("≈ 50 × 40 cm · Check");
+  /// left out where the label is short of room.
   final String sizeCheckSuffix;
 
-  /// Size tool label when no size can be estimated.
+  /// Size label when no size can be estimated.
   final String sizeUnknownLabel;
 
   /// Shape label when the outline is round / oval / a rectangle (the

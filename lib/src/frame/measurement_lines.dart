@@ -30,6 +30,15 @@ class FrameMeasurementLines extends StatelessWidget {
 
   static const double _thickness = 26;
 
+  /// Where the height line and its label are drawn for [outline] inside
+  /// [bounds].
+  static Rect heightLineArea(Rect outline, Size bounds) => Rect.fromLTWH(
+        math.max(0, math.min(outline.right + 7, bounds.width - _thickness)),
+        outline.top,
+        _thickness,
+        math.max(0, outline.height),
+      );
+
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(

@@ -161,8 +161,9 @@ const int _manualShapeKey = -1;
 
 /// The "choose the painting's rectangle" step: the photo with a draggable
 /// four-corner outline, up to [kMaxFrameCandidates] detector outlines as
-/// chips, and a tool row (enhancer toggle, Rotate, Full photo, Reset, and
-/// Retake when [onRetake] is set).
+/// chips, and a tool row (Retake when [onRetake] is set, Rotate, Full
+/// photo). The size and the enhancer toggle are small labels on the photo;
+/// Reset appears under the tool row once there is something to reset.
 class FrameCropView extends StatefulWidget {
   final Uint8List imageBytes;
   final ZFrameDetector? detector;
@@ -176,7 +177,7 @@ class FrameCropView extends StatefulWidget {
   /// State to restore when the step is reopened.
   final FrameCropResult? previous;
 
-  /// Show the Size tool, the measurement lines and the size sheet.
+  /// Show the size on the photo, the measurement lines and the size sheet.
   final bool sizeTools;
 
   /// Size known before the step (artwork details or measured).
@@ -732,6 +733,12 @@ class _FrameCropViewState extends State<FrameCropView> {
     return '≈ ${s.hwText} cm${l.sizeCheckSuffix}';
   }
 
+  /// The estimate without "· Check", for where the label is short of room.
+  String? get _sizeShortLabel {
+    final s = _shownSize;
+    return s == null || s.isExact ? null : '≈ ${s.hwText} cm';
+  }
+
   Future<void> _openSizeSheet() async {
     final result = await showZArtworkSizeSheet(
       context,
@@ -999,7 +1006,6 @@ class _FrameCropViewState extends State<FrameCropView> {
   @override
   Widget build(BuildContext context) {
     final labels = widget.labels;
-    final enhancer = widget.enhancer;
     return Material(
       color: _theme.backgroundColor,
       child: Column(
@@ -1042,9 +1048,11 @@ class _FrameCropViewState extends State<FrameCropView> {
           Expanded(child: _buildCanvas()),
           Container(
             color: _theme.panelColor,
+            // No gap of its own at the bottom: the last row is Reset's
+            // tap area (44 px, its text in the middle).
             padding: EdgeInsets.only(
               top: 4,
-              bottom: 8 + MediaQuery.paddingOf(context).bottom,
+              bottom: MediaQuery.paddingOf(context).bottom,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1066,42 +1074,27 @@ class _FrameCropViewState extends State<FrameCropView> {
                   child: _buildChips(labels),
                 ),
                 const SizedBox(height: 12),
+                // Size and reflections sit on the photo (see _buildCanvas);
+                // one-line labels, so the row is a line lower.
                 FrameToolRow(
                   theme: _theme,
+                  height: FrameToolRow.heightFor(_theme, labelLines: 1),
                   children: [
-                    if (widget.sizeTools)
+                    if (widget.onRetake != null)
                       ZToolButton(
-                        key: const Key('z_frame_size'),
+                        key: const Key('z_frame_retake'),
                         theme: _theme,
-                        icon: _exactSize != null
-                            ? ZLineIconKind.sizeConfirmed
-                            : ZLineIconKind.sizeEstimated,
-                        label: _sizeButtonLabel,
-                        active: _exactSize != null,
-                        toggled: _exactSize != null,
-                        onTap:
-                            _applying || _image == null ? null : _openSizeSheet,
-                      ),
-                    if (enhancer != null &&
-                        (_enhancing || _enhancedBytes != null))
-                      ZToolButton(
-                        key: const Key('z_frame_enhance'),
-                        theme: _theme,
-                        icon: _enhanceOn
-                            ? ZLineIconKind.reflectionsOff
-                            : ZLineIconKind.reflections,
-                        label: _enhanceOn ? enhancer.label : enhancer.offLabel,
-                        active: _enhanceOn && !_enhancing,
-                        toggled: _enhanceOn,
-                        onTap: _enhancing || _applying
-                            ? null
-                            : () => setState(() => _enhanceOn = !_enhanceOn),
+                        icon: ZLineIconKind.camera,
+                        label: labels.retakeLabel,
+                        labelLines: 1,
+                        onTap: _applying ? null : widget.onRetake,
                       ),
                     ZToolButton(
                       key: const Key('z_frame_rotate'),
                       theme: _theme,
                       icon: ZLineIconKind.rotate,
                       label: labels.rotateLabel,
+                      labelLines: 1,
                       onTap: _applying || _image == null ? null : _rotate,
                     ),
                     ZToolButton(
@@ -1109,26 +1102,26 @@ class _FrameCropViewState extends State<FrameCropView> {
                       theme: _theme,
                       icon: ZLineIconKind.fullPhoto,
                       label: labels.fullPhotoLabel,
+                      labelLines: 1,
                       active: _isFullPhoto,
                       activeColor: _theme.accentColor,
                       onTap: _applying ? null : () => _selectCandidate(null),
                     ),
-                    ZToolButton(
-                      key: const Key('z_frame_reset'),
-                      theme: _theme,
-                      icon: ZLineIconKind.reset,
-                      label: widget.resetLabel,
-                      onTap: _applying || !_canReset ? null : _reset,
-                    ),
-                    if (widget.onRetake != null)
-                      ZToolButton(
-                        key: const Key('z_frame_retake'),
-                        theme: _theme,
-                        icon: ZLineIconKind.camera,
-                        label: labels.retakeLabel,
-                        onTap: _applying ? null : widget.onRetake,
-                      ),
                   ],
+                ),
+                // Reset only exists once there is something to reset. Its
+                // room is always there, so the chips, the tools and the
+                // photo stay put when it comes and goes.
+                SizedBox(
+                  height: FrameResetButton.height,
+                  child: _canReset && !_applying
+                      ? FrameResetButton(
+                          key: const Key('z_frame_reset'),
+                          theme: _theme,
+                          label: widget.resetLabel,
+                          onTap: _reset,
+                        )
+                      : null,
                 ),
               ],
             ),
@@ -1253,6 +1246,39 @@ class _FrameCropViewState extends State<FrameCropView> {
             ? _boundsOf(ZQuadMath.inscribedEllipse(pts, segments: 48))
             : _boundsOf(pts);
 
+        // Size and reflections on the photo. Hidden while the outline is
+        // searched for or dragged; kept off the handles (which also sit
+        // above them, so a handle always wins a touch).
+        final enhancer = widget.enhancer;
+        final canvas = Size(constraints.maxWidth, constraints.maxHeight);
+        final labelsShown = !_detecting &&
+            _dragCorner == null &&
+            // Room for one at the top and one at the bottom.
+            canvas.height >= FramePhotoLabelLayout.reserved * 2;
+        final showSize = widget.sizeTools && labelsShown;
+        final showEnhance = enhancer != null &&
+            (_enhancing || _enhancedBytes != null) &&
+            labelsShown;
+        final handleAreas = [
+          for (final h in handles)
+            Rect.fromCenter(center: h, width: hit, height: hit),
+        ];
+        final lines =
+            widget.sizeTools && _theme.showMeasurements ? _shownSize : null;
+        // The width line stays above the size label.
+        final lineBounds = Size(
+          canvas.width,
+          math.max(
+              0,
+              canvas.height -
+                  (widget.sizeTools ? FramePhotoLabelLayout.reserved : 0)),
+        );
+        final enhanceLabel = enhancer == null
+            ? ''
+            : _enhanceOn
+                ? enhancer.label
+                : enhancer.offLabel;
+
         return Stack(
           key: const Key('z_frame_canvas'),
           clipBehavior: Clip.none,
@@ -1277,6 +1303,64 @@ class _FrameCropViewState extends State<FrameCropView> {
                 ),
               ),
             ),
+            // Always in the stack (empty when hidden): the handles after it
+            // keep their place, also when the labels go mid-drag.
+            Positioned.fill(
+              child: Stack(
+                children: [
+                  if (showEnhance)
+                    CustomSingleChildLayout(
+                      delegate: FramePhotoLabelLayout(
+                        top: true,
+                        wanted:
+                            ZPhotoPill.sizeFor(context, _theme, enhanceLabel),
+                        avoid: [
+                          ...handleAreas,
+                          if (lines != null)
+                            FrameMeasurementLines.heightLineArea(
+                                outlineBounds, lineBounds),
+                        ],
+                      ),
+                      child: ZPhotoPill(
+                        key: const Key('z_frame_enhance'),
+                        theme: _theme,
+                        icon: _enhanceOn
+                            ? ZLineIconKind.reflectionsOff
+                            : ZLineIconKind.reflections,
+                        label: enhanceLabel,
+                        filled: _enhanceOn && !_enhancing,
+                        busy: _enhancing,
+                        toggled: _enhanceOn,
+                        onTap: _enhancing || _applying
+                            ? null
+                            : () => setState(() => _enhanceOn = !_enhanceOn),
+                      ),
+                    ),
+                  if (showSize)
+                    CustomSingleChildLayout(
+                      delegate: FramePhotoLabelLayout(
+                        top: false,
+                        wanted: ZPhotoPill.sizeFor(
+                            context, _theme, _sizeButtonLabel),
+                        avoid: handleAreas,
+                      ),
+                      child: ZPhotoPill(
+                        key: const Key('z_frame_size'),
+                        theme: _theme,
+                        icon: _exactSize != null
+                            ? ZLineIconKind.sizeConfirmed
+                            : ZLineIconKind.edit,
+                        label: _sizeButtonLabel,
+                        shortLabel: _sizeShortLabel,
+                        active: _exactSize != null,
+                        toggled: _exactSize != null,
+                        onTap:
+                            _applying || _image == null ? null : _openSizeSheet,
+                      ),
+                    ),
+                ],
+              ),
+            ),
             for (var i = 0; i < 4; i++)
               Positioned(
                 left: handles[i].dx - hit / 2,
@@ -1294,19 +1378,18 @@ class _FrameCropViewState extends State<FrameCropView> {
                   onEnd: () => setState(() => _dragCorner = null),
                 ),
               ),
-            if (widget.sizeTools && _theme.showMeasurements)
-              if (_shownSize case final shown?)
-                Positioned.fill(
-                  child: FrameMeasurementLines(
-                    theme: _theme,
-                    outline: outlineBounds,
-                    bounds: Size(constraints.maxWidth, constraints.maxHeight),
-                    heightLabel:
-                        '${shown.isExact ? '' : '≈ '}${formatCm(shown.heightCm)} cm',
-                    widthLabel:
-                        '${shown.isExact ? '' : '≈ '}${formatCm(shown.widthCm)} cm',
-                  ),
+            if (lines != null)
+              Positioned.fill(
+                child: FrameMeasurementLines(
+                  theme: _theme,
+                  outline: outlineBounds,
+                  bounds: lineBounds,
+                  heightLabel:
+                      '${lines.isExact ? '' : '≈ '}${formatCm(lines.heightCm)} cm',
+                  widthLabel:
+                      '${lines.isExact ? '' : '≈ '}${formatCm(lines.widthCm)} cm',
                 ),
+              ),
             if (widget.enableMagnifyingGlass && _dragCorner != null)
               _buildLoupe(image, fitted, pts, handles[_dragCorner!], ellipse,
                   constraints),
@@ -1478,12 +1561,26 @@ class FrameToolRow extends StatelessWidget {
   final ZImageEditorTheme theme;
   final List<Widget> children;
 
-  const FrameToolRow({super.key, required this.theme, required this.children});
+  /// 64 holds buttons with two-line labels.
+  final double height;
+
+  const FrameToolRow({
+    super.key,
+    required this.theme,
+    required this.children,
+    this.height = 64,
+  });
+
+  /// Height for buttons whose labels take [labelLines] lines.
+  static double heightFor(ZImageEditorTheme theme, {required int labelLines}) =>
+      64 -
+      ZToolButton.toolLabelHeight(theme, 2) +
+      ZToolButton.toolLabelHeight(theme, labelLines);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 64,
+      height: height,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: theme.dividerColor)),
@@ -1493,6 +1590,153 @@ class FrameToolRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Reset as a small, muted text button (icon and label) under the tool row.
+class FrameResetButton extends StatelessWidget {
+  final ZImageEditorTheme theme;
+  final String label;
+  final VoidCallback onTap;
+
+  const FrameResetButton({
+    super.key,
+    required this.theme,
+    required this.label,
+    required this.onTap,
+  });
+
+  /// Tap height, and the room the frame step keeps for it.
+  static const double height = 44;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = theme.mutedTextColor;
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: 88,
+            minHeight: height,
+            maxWidth: math.max(88, MediaQuery.sizeOf(context).width - 32),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            // A label too large for its room scales down.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ZLineIcon(ZLineIconKind.reset, color: color, size: 16),
+                  const SizedBox(width: 6),
+                  Text(label,
+                      maxLines: 1,
+                      style: theme.text(color: color, fontSize: 13)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Places a label on the photo: top right ([top]) or bottom centre of the
+/// canvas, about 10 px from its edges, and never on one of the [avoid]
+/// areas (the handles' touch areas). Next to an area in its way the label
+/// moves aside, or gets narrower when there is no room for all of it.
+class FramePhotoLabelLayout extends SingleChildLayoutDelegate {
+  final bool top;
+
+  /// The label's size with all the room it wants (see [ZPhotoPill.sizeFor]).
+  final Size wanted;
+  final List<Rect> avoid;
+
+  const FramePhotoLabelLayout({
+    required this.top,
+    required this.wanted,
+    required this.avoid,
+  });
+
+  /// From the canvas edge to the pill (10 px) at the sides, and to its tap
+  /// area above / below (the pill is 7 px inside it).
+  static const double _marginX = 10;
+  static const double _marginY = 3;
+  static const double _gap = 4;
+
+  /// Canvas height taken by the bottom label at text scale 1.
+  static const double reserved = _marginY + ZPhotoPill.minTapSize;
+
+  double _y(Size size, double height) =>
+      top ? _marginY : size.height - _marginY - height;
+
+  double _ideal(Size size, double width) =>
+      top ? size.width - _marginX - width : (size.width - width) / 2;
+
+  /// Free room (left, right) for the label in its strip of the canvas.
+  (double, double) _slot(Size size) {
+    final full = (_marginX, math.max(_marginX, size.width - _marginX));
+    final strip =
+        Rect.fromLTWH(0, _y(size, wanted.height), size.width, wanted.height);
+    final blocks = [
+      for (final a in avoid)
+        if (a.overlaps(strip)) a,
+    ]..sort((a, b) => a.left.compareTo(b.left));
+    final slots = <(double, double)>[];
+    var from = full.$1;
+    for (final b in blocks) {
+      if (b.left - _gap > from) slots.add((from, b.left - _gap));
+      from = math.max(from, b.right + _gap);
+    }
+    if (full.$2 > from) slots.add((from, full.$2));
+    final want = math.min(wanted.width, full.$2 - full.$1);
+    final ideal = _ideal(size, want);
+    // How far the label would sit from its place in slot [s].
+    double moved((double, double) s) =>
+        (ideal.clamp(s.$1, math.max(s.$1, s.$2 - want)) - ideal).abs();
+    final roomy = [
+      for (final s in slots)
+        if (s.$2 - s.$1 >= want) s,
+    ];
+    if (roomy.isNotEmpty) {
+      return roomy.reduce((a, b) => moved(b) < moved(a) ? b : a);
+    }
+    final widest = slots.fold<(double, double)?>(
+        null, (a, b) => a == null || b.$2 - b.$1 > a.$2 - a.$1 ? b : a);
+    // No room next to the areas at all: its own place (the handles are
+    // above it and keep their touches).
+    return widest == null || widest.$2 - widest.$1 < ZPhotoPill.minTapSize
+        ? full
+        : widest;
+  }
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final slot = _slot(constraints.biggest);
+    return BoxConstraints(
+      maxWidth: math.max(0, slot.$2 - slot.$1),
+      maxHeight: constraints.maxHeight,
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final slot = _slot(size);
+    final x = _ideal(size, childSize.width)
+        .clamp(slot.$1, math.max(slot.$1, slot.$2 - childSize.width))
+        .toDouble();
+    return Offset(x, math.max(0, _y(size, childSize.height)));
+  }
+
+  @override
+  bool shouldRelayout(FramePhotoLabelLayout old) =>
+      old.top != top || old.wanted != wanted || !listEquals(old.avoid, avoid);
 }
 
 /// Round corner handle with a larger, transparent touch target.

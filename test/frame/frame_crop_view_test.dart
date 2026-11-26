@@ -260,21 +260,21 @@ void main() {
     expect(handle(tester, 0).dx, lessThan(tr.dx));
   });
 
-  testWidgets('Reset restores the default outline and is greyed when clean',
+  testWidgets('Reset restores the default outline and is not there when clean',
       (tester) async {
     await pumpFrame(tester, detector: FakeDetector(threeCandidates));
-    ZToolButton reset() =>
-        tester.widget<ZToolButton>(find.byKey(const Key('z_frame_reset')));
-    expect(reset().onTap, isNull);
+    final reset = find.byKey(const Key('z_frame_reset'));
+    expect(reset, findsNothing);
     final original = handle(tester, 3);
     await tester.drag(
         find.byKey(const Key('z_frame_handle_3')), const Offset(25, -25));
     await tester.pump();
     expect(handle(tester, 3), isNot(original));
-    expect(reset().onTap, isNotNull);
-    await tester.tap(find.byKey(const Key('z_frame_reset')));
+    expect(reset, findsOneWidget);
+    await tester.tap(reset);
     await tester.pump();
     expect(handle(tester, 3), original);
+    expect(reset, findsNothing);
     expect(selected(tester, 'z_frame_chip_0'), isTrue);
     expect(find.text('With frame'), findsOneWidget);
   });
