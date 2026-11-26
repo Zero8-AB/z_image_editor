@@ -151,10 +151,13 @@ class ZAutoLevels {
     // 1. One gain and offset for all channels, from luma.
     final lo = _percentile(lumaHist, counted, blackClip).toDouble();
     final hi = _percentile(lumaHist, counted, 1 - clip).toDouble();
+    // A near-black photo has no top to lift; a gain from it would black
+    // out the few bright pixels.
+    if (hi < 1) return const ZAutoLevels(gain: [1, 1, 1], offset: [0, 0, 0]);
     // White point: lift the top to whiteTarget (never down), at most
     // maxWhiteLift; dark artworks keep their top.
     final targetHi = hi >= minWhiteTop ? math.max(hi, whiteTarget) : hi;
-    final whiteLift = math.min(targetHi / math.max(hi, 1), maxWhiteLift);
+    final whiteLift = math.min(targetHi / hi, maxWhiteLift);
     // Black point: part of the lift above blackFloor, capped.
     var black =
         math.min(blackShare * math.max(lo - blackFloor, 0), maxBlackCut);

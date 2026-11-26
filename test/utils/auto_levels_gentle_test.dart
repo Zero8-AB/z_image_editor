@@ -385,4 +385,22 @@ void main() {
       }
     });
   });
+
+  test('a near-black photo (99.5th luma percentile 0) is left alone', () {
+    // 0.4 % of the pixels at 200, the rest black: the top percentile is 0.
+    const w = 100, h = 100;
+    final rgba = Uint8List(w * h * 4);
+    for (var i = 0; i < w * h; i++) {
+      final v = i < 40 ? 200 : 0;
+      rgba[i * 4] = v;
+      rgba[i * 4 + 1] = v;
+      rgba[i * 4 + 2] = v;
+      rgba[i * 4 + 3] = 255;
+    }
+    final fix = ZAutoLevels.analyzeRgba(rgba, w, h);
+    expect(fix.isNoop, isTrue, reason: 'gain ${fix.gain}');
+    for (var c = 0; c < 3; c++) {
+      expect(fix.apply(c, 200), greaterThanOrEqualTo(199));
+    }
+  });
 }
